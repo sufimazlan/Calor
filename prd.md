@@ -5,7 +5,7 @@
 | **Product** | Calor — personal calorie tracker (iOS native) |
 | **Owner** | Sufi |
 | **Users** | Sufi and his wife (2 iPhones) |
-| **Status** | Draft v0.5 |
+| **Status** | Draft v0.6 |
 | **Last updated** | 4 October 2026 |
 
 ---
@@ -195,6 +195,22 @@ Until a Claude API key is added, photo analysis returns realistic sample results
 - **Model choice:** Haiku 4.5 (default, cheapest) or Sonnet 5.5 (more accurate, about 2× the cost per photo). — P1
 - **Daily calorie goal.**
 - **Budget and usage (P0):** "US$0.42 of US$5.00 used this month · 96 photos", based on the real token counts Claude returns. Editable monthly budget for this phone (default US$5.00, maximum US$5.00 so both phones together stay within US$10). Shows when the counter resets.
+
+### 6.6b Automatic backup — P0
+
+- One-time setup in Settings → **Automatic backup → Choose backup folder**: the user picks or creates a folder in the Files app, recommended **On My iPhone/Calor Backups**. Calor remembers it with a bookmark.
+- A backup is written when the app opens (if none today) and when it goes to the background (if the last one is over 15 minutes old). One JSON file per day, named `Calor backup YYYY-MM-DD.json` in local time, replaced through the day. The newest **7** are kept.
+- Contents: every meal (optionally with photo thumbnails), profile, name and photo, targets, rollover and reminder settings.
+- **Restore from a backup…** replaces all meals and settings on the phone after a confirmation.
+- Each phone backs up to its own storage. Files in On My iPhone survive deleting the app, but not losing the phone. iCloud Drive or Google Drive can be picked instead for off-phone copies.
+- Today shows a dismissible "Protect your meals" card until a folder is chosen (once meals exist).
+
+### 6.6c Reinstall reminders (free Apple ID) — P0
+
+- Calor reads its own expiry date from the provisioning profile Xcode embeds in the app (`embedded.mobileprovision` → `ExpirationDate`; 7 days with a free Apple ID).
+- Local notifications **1 day** and **1 hour** before expiry: "Reinstall Calor from Xcode". Rescheduled each time the app opens. Can be turned off in Settings.
+- Settings → App install shows the expiry date. In the last 24 hours, Today shows an orange banner.
+- If a reinstall doesn't move the expiry date (Xcode reused a still-valid profile), the date in Settings shows it, and the profile has to be refreshed in Xcode.
 
 ### 6.7 Later ideas — P2
 

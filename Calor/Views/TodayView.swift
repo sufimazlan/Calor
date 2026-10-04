@@ -51,6 +51,8 @@ private struct DayLog: View {
     @AppStorage(SettingsKey.fatTargetG) private var fatTarget = 0
     @AppStorage(SettingsKey.rolloverEnabled) private var rolloverEnabled = false
     @AppStorage(SettingsKey.profile) private var profileData: Data?
+    @AppStorage(SettingsKey.backupFolderBookmark) private var backupFolderBookmark: Data?
+    @AppStorage(SettingsKey.backupPromptDismissed) private var backupPromptDismissed = false
     @Query private var entries: [FoodEntry]
     /// Yesterday's entries, for rolling over unused calories.
     @Query private var yesterdayEntries: [FoodEntry]
@@ -117,6 +119,41 @@ private struct DayLog: View {
     var body: some View {
         ScrollViewReader { proxy in
             List {
+                if InstallInfo.expiresSoon, let expiry = InstallInfo.expirationDate {
+                    Section {
+                        Label {
+                            Text("Calor stops opening \(expiry.formatted(date: .abbreviated, time: .shortened)). Reinstall from Xcode on the Mac (⌘R) before then. Your meals are kept.")
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                        .font(.subheadline)
+                    }
+                }
+
+                if backupFolderBookmark == nil && !backupPromptDismissed && !entries.isEmpty {
+                    Section {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("Protect your meals", systemImage: "externaldrive.badge.checkmark")
+                                .font(.headline)
+                            Text("Turn on automatic backup so your meals are safe even if the app is deleted.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            HStack {
+                                Button("Set up backup") {
+                                    isShowingSettings = true
+                                }
+                                .buttonStyle(.borderedProminent)
+                                Button("Not now") {
+                                    backupPromptDismissed = true
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
                 Section {
                     CalorieSummary(eaten: totalCalories, goal: todayGoal,
                                    proteinG: Int(totalProteinG.rounded()), proteinTargetG: proteinTarget,

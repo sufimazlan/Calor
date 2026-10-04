@@ -33,4 +33,17 @@ enum SettingsKey {
     static let breakfastReminderMinutes = "breakfastReminderMinutes"
     static let lunchReminderMinutes = "lunchReminderMinutes"
     static let dinnerReminderMinutes = "dinnerReminderMinutes"
+
+    /// Notifications 1 day and 1 hour before this install expires (free Apple ID: 7 days).
+    static let reinstallRemindersEnabled = "reinstallRemindersEnabled"
+
+    /// Automatic backup to a folder the user picks once (e.g. On My iPhone/Calor Backups).
+    static let backupFolderBookmark = "backupFolderBookmark"
+    /// Seconds since 1970 of the last successful backup. 0 means never.
+    static let backupLastDate = "backupLastDate"
+    /// Why the last backup failed, or empty.
+    static let backupLastError = "backupLastError"
+    static let backupIncludesPhotos = "backupIncludesPhotos"
+    /// The Today screen's "turn on backup" card was dismissed.
+    static let backupPromptDismissed = "backupPromptDismissed"
 }

@@ -110,6 +110,8 @@ struct SettingsView: View {
                     }
                 }
 
+                BackupSettingsSection()
+
                 Section {
                     LabeledContent("Mode", value: "Demo")
                 } header: {

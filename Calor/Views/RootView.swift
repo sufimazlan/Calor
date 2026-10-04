@@ -12,11 +12,37 @@ struct RootView: View {
     }
 
     @AppStorage(SettingsKey.profile) private var profileData: Data?
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.modelContext) private var modelContext
     @State private var selectedTab = AppTab.today
     /// Goes up by one each time the logo is tapped, so Today scrolls to the top.
     @State private var homeRequests = 0
 
     var body: some View {
+        Group {
+            content
+        }
+        .task {
+            await ReinstallReminders.reschedule()
+            BackupManager.backUpIfNeeded(context: modelContext, minimumAge: 20 * 60 * 60)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                // A reinstall from Xcode may bring a new expiry date.
+                Task { await ReinstallReminders.reschedule() }
+                BackupManager.backUpIfNeeded(context: modelContext, minimumAge: 20 * 60 * 60)
+            case .background:
+                // Capture meals logged since the last backup.
+                BackupManager.backUpIfNeeded(context: modelContext, minimumAge: 15 * 60)
+            default:
+                break
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if Profile(data: profileData) == nil {
             OnboardingView()
         } else {
