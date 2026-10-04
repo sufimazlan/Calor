@@ -5,7 +5,7 @@
 | **Product** | Calor — personal calorie tracker (iOS native) |
 | **Owner** | Sufi |
 | **Users** | Sufi and his wife (2 iPhones) |
-| **Status** | Draft v0.3 |
+| **Status** | Draft v0.4 |
 | **Last updated** | 4 October 2026 |
 
 ---
@@ -29,7 +29,7 @@ The app is built for personal use only. It is not published to the App Store.
 - App Store release, sign-up or user accounts.
 - Syncing data between the two phones (each phone keeps its own log).
 - Barcode scanning, restaurant databases or a built-in food database.
-- Exercise tracking, Apple Health integration or weight tracking.
+- Exercise tracking, Apple Health integration or weight history. (The profile stores current weight only, to calculate targets.)
 - Android or web versions.
 
 These can be revisited after v1 (see section 12).
@@ -60,11 +60,29 @@ These can be revisited after v1 (see section 12).
 
 Priority: **P0** = must have for v1, **P1** = should have for v1, **P2** = later.
 
+### 6.0 First-launch profile — P0
+
+On first launch, about 30 seconds of questions work out personal targets instead of a flat 2,000 kcal:
+
+1. Sex, birth year, height, weight.
+2. Activity level: mostly sitting / lightly active / active / very active.
+3. Goal: lose, maintain or gain weight, with pace (lose 0.25 / 0.5 / 0.75 kg a week; gain 0.25 / 0.5).
+4. Result screen: suggested daily goal (adjustable in 50 kcal steps) and protein target, with the breakdown.
+
+**Calculations (on the phone):**
+
+- BMR with Mifflin–St Jeor: 10 × kg + 6.25 × cm − 5 × age, +5 for men or −161 for women.
+- Maintenance = BMR × activity multiplier (1.2 / 1.375 / 1.55 / 1.725).
+- Goal = maintenance ∓ pace × 7,700 kcal ÷ 7 (0.5 kg a week ≈ 550 kcal a day), never below 1,500 kcal for men or 1,200 kcal for women. Rounded to 10 kcal.
+- Protein target = 1.6 g per kg when losing or gaining, 1.2 g per kg when maintaining.
+
+The profile is stored only on the phone and is never sent to Claude. It can be edited later in Settings → Profile, and saving recalculates both targets. The daily goal and protein target can also be fine-tuned by hand.
+
 ### 6.1 Today screen (home) — P0
 
 The app is **photo-first**: snapping or uploading a photo is the main way to log a meal.
 
-- Shows today's date, total calories eaten, daily goal and calories remaining (a progress ring).
+- Shows today's date, total calories eaten, daily goal and calories remaining (a progress ring), plus protein eaten against the protein target.
 - **What's next** card: a short tip worked out on the phone from today's numbers and the time of day (e.g. "800 kcal left for dinner and anything after", "You're 200 kcal over, keep the rest of today light", or a nudge when protein is low). No API call, so it's free and works offline.
 - Lists today's entries grouped by meal (Breakfast, Lunch, Dinner, Snack), showing name, calories and a thumbnail if there is a photo.
 - Two main buttons: **Snap meal** (camera) and **Upload** (photo library). In the simulator, which has no camera, only Upload is shown.
@@ -179,7 +197,9 @@ Until a Claude API key is added, photo analysis returns realistic sample results
 
 **Settings** (stored with `@AppStorage` / UserDefaults, except the API key)
 
-- dailyGoalKcal: Int (default 2000)
+- profile: the 6.0 answers as JSON (missing until first-launch setup is finished)
+- dailyGoalKcal: Int (from the profile; default 2000)
+- proteinTargetG: Int (from the profile; 0 = off)
 - selectedModel: String (default `claude-haiku-4-5-20251001`)
 - monthlyBudgetUSD: Double (default 5.00, max 5.00)
 - usageMonth: String, e.g. "2026-10". When the current month differs, reset the monthly counters.

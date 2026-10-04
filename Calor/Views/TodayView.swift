@@ -33,6 +33,7 @@ private struct DayLog: View {
 
     @Environment(\.modelContext) private var modelContext
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
+    @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
     @Query private var entries: [FoodEntry]
 
     @State private var isAddingEntry = false
@@ -58,13 +59,18 @@ private struct DayLog: View {
         entries.reduce(0) { $0 + $1.calories }
     }
 
+    private var totalProteinG: Double {
+        entries.compactMap(\.proteinG).reduce(0, +)
+    }
+
     private var whatsNext: String {
         Advice.whatsNext(
             eaten: totalCalories,
             goal: dailyGoal,
-            proteinG: entries.compactMap(\.proteinG).reduce(0, +),
+            proteinG: totalProteinG,
             carbsG: entries.compactMap(\.carbsG).reduce(0, +),
             fatG: entries.compactMap(\.fatG).reduce(0, +),
+            proteinTargetG: proteinTarget,
             hasEntries: !entries.isEmpty
         )
     }
@@ -72,7 +78,8 @@ private struct DayLog: View {
     var body: some View {
         List {
             Section {
-                CalorieSummary(eaten: totalCalories, goal: dailyGoal)
+                CalorieSummary(eaten: totalCalories, goal: dailyGoal,
+                               proteinG: Int(totalProteinG.rounded()), proteinTargetG: proteinTarget)
                     .frame(maxWidth: .infinity)
             } header: {
                 Text(day, format: .dateTime.weekday(.wide).day().month(.wide))

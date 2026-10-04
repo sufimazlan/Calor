@@ -5,10 +5,13 @@
 
 import SwiftUI
 
-/// Progress ring showing calories left (or over) for the day, plus eaten and goal.
+/// Progress ring showing calories left (or over) for the day, plus eaten, goal
+/// and protein when a protein target is set.
 struct CalorieSummary: View {
     let eaten: Int
     let goal: Int
+    var proteinG: Int?
+    var proteinTargetG: Int?
 
     private var remaining: Int { goal - eaten }
     private var isOver: Bool { remaining < 0 }
@@ -36,18 +39,21 @@ struct CalorieSummary: View {
             }
             .frame(width: 180, height: 180)
 
-            HStack(spacing: 40) {
-                stat("Eaten", value: eaten)
-                stat("Goal", value: goal)
+            HStack(spacing: 32) {
+                stat("Eaten", value: eaten.formatted())
+                stat("Goal", value: goal.formatted())
+                if let proteinG, let proteinTargetG, proteinTargetG > 0 {
+                    stat("Protein", value: "\(proteinG)/\(proteinTargetG) g")
+                }
             }
         }
         .padding(.vertical, 8)
         .accessibilityElement(children: .combine)
     }
 
-    private func stat(_ title: String, value: Int) -> some View {
+    private func stat(_ title: String, value: String) -> some View {
         VStack(spacing: 2) {
-            Text(value, format: .number)
+            Text(value)
                 .font(.headline)
                 .monospacedDigit()
             Text(title)
@@ -59,7 +65,7 @@ struct CalorieSummary: View {
 
 #Preview {
     VStack(spacing: 40) {
-        CalorieSummary(eaten: 1350, goal: 2000)
+        CalorieSummary(eaten: 1350, goal: 2000, proteinG: 62, proteinTargetG: 120)
         CalorieSummary(eaten: 2250, goal: 2000)
     }
 }

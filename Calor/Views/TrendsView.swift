@@ -11,6 +11,7 @@ import Charts
 /// and works offline.
 struct TrendsView: View {
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
+    @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
     @Query private var entries: [FoodEntry]
     @State private var selectedDate: Date?
 
@@ -161,22 +162,30 @@ struct TrendsView: View {
             Text("No macros logged yet.")
                 .foregroundStyle(.secondary)
         } else {
-            macroRow("Protein", grams: protein, share: protein * 4 / total, days: daysLogged)
+            macroRow("Protein", grams: protein, share: protein * 4 / total, days: daysLogged,
+                     targetG: proteinTarget > 0 ? proteinTarget : nil)
             macroRow("Carbs", grams: carbs, share: carbs * 4 / total, days: daysLogged)
             macroRow("Fat", grams: fat, share: fat * 9 / total, days: daysLogged)
         }
     }
 
-    private func macroRow(_ name: String, grams: Double, share: Double, days: Int) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func macroRow(_ name: String, grams: Double, share: Double, days: Int, targetG: Int? = nil) -> some View {
+        let perDay = Int((grams / Double(max(days, 1))).rounded())
+        return VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(name)
                 Spacer()
                 Text(share, format: .percent.precision(.fractionLength(0)))
                     .monospacedDigit()
-                Text("· \(Int((grams / Double(max(days, 1))).rounded())) g/day")
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+                Group {
+                    if let targetG {
+                        Text("· \(perDay) of \(targetG) g/day")
+                    } else {
+                        Text("· \(perDay) g/day")
+                    }
+                }
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
             }
             ProgressView(value: share)
         }

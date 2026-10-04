@@ -14,6 +14,7 @@ enum Advice {
         proteinG: Double,
         carbsG: Double,
         fatG: Double,
+        proteinTargetG: Int,
         hasEntries: Bool,
         now: Date = .now
     ) -> String {
@@ -44,10 +45,18 @@ enum Advice {
             }
         }
 
-        // Protein check, only once a fair amount has been eaten and macros were logged.
+        // Protein check, only when macros were logged.
         let macroCalories = proteinG * 4 + carbsG * 4 + fatG * 9
-        if eaten >= 800, macroCalories > 0, proteinG * 4 / macroCalories < 0.15 {
-            tip += " Protein is low so far. Eggs, chicken, fish, tofu or tempeh would help at your next meal."
+        guard macroCalories > 0 else { return tip }
+        let proteinIdea = "Eggs, chicken, fish, tofu or tempeh would help at your next meal."
+        if proteinTargetG > 0 {
+            // Expect about half the target by mid-afternoon and three quarters by evening.
+            let expectedShare = hour >= 19 ? 0.75 : (hour >= 15 ? 0.5 : 0)
+            if proteinG < Double(proteinTargetG) * expectedShare {
+                tip += " Protein so far: \(Int(proteinG.rounded())) of \(proteinTargetG) g. \(proteinIdea)"
+            }
+        } else if eaten >= 800, proteinG * 4 / macroCalories < 0.15 {
+            tip += " Protein is low so far. \(proteinIdea)"
         }
         return tip
     }
