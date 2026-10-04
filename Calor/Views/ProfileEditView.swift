@@ -14,12 +14,23 @@ struct ProfileEditView: View {
 
     @State private var profile: Profile
     @State private var isRedoingSetup = false
+    /// The user's tweaks to the calculated targets, if any.
+    @State private var adjustedGoal: Int?
+    @State private var adjustedProtein: Int?
     /// Saved profile when the step-by-step setup was opened, to tell if it was saved.
     @State private var profileDataBeforeRedo: Data?
 
     init() {
         let saved = Profile(data: UserDefaults.standard.data(forKey: SettingsKey.profile))
         _profile = State(initialValue: saved ?? Profile())
+    }
+
+    private var goalValue: Int {
+        adjustedGoal ?? profile.suggestedCalories
+    }
+
+    private var proteinValue: Int {
+        adjustedProtein ?? profile.suggestedProteinG
     }
 
     var body: some View {
@@ -77,12 +88,33 @@ struct ProfileEditView: View {
             }
 
             Section {
-                LabeledContent("Daily goal", value: "\(profile.suggestedCalories.formatted()) kcal")
-                LabeledContent("Protein target", value: "\(profile.suggestedProteinG) g a day")
+                Stepper(value: Binding(get: { goalValue }, set: { adjustedGoal = $0 }),
+                        in: 1000...5000, step: 50) {
+                    LabeledContent("Daily goal", value: "\(goalValue.formatted()) kcal")
+                }
+                Stepper(value: Binding(get: { proteinValue }, set: { adjustedProtein = $0 }),
+                        in: 0...300, step: 5) {
+                    LabeledContent("Protein target", value: "\(proteinValue) g a day")
+                }
+                if adjustedGoal != nil || adjustedProtein != nil {
+                    Button("Use calculated targets (\(profile.suggestedCalories.formatted()) kcal, \(profile.suggestedProteinG) g)") {
+                        adjustedGoal = nil
+                        adjustedProtein = nil
+                    }
+                }
             } header: {
                 Text("New targets")
             } footer: {
-                Text("Saving replaces your current goal (\(dailyGoal.formatted()) kcal) and protein target.")
+                Text("Calculated from your answers above. Use − / + to fine-tune. Saving replaces your current goal (\(dailyGoal.formatted()) kcal) and protein target.")
+            }
+
+            Section {
+                GoalProjectionView(
+                    maintenance: profile.maintenanceCalories,
+                    goal: goalValue,
+                    minimum: profile.minimumCalories
+                )
+                .padding(.vertical, 4)
             }
         }
         .navigationTitle("Profile")
@@ -92,12 +124,17 @@ struct ProfileEditView: View {
         .onChange(of: profile.goal) {
             profile.normalizePace()
         }
+        .onChange(of: profile) {
+            // New answers mean new calculated targets.
+            adjustedGoal = nil
+            adjustedProtein = nil
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
                     profileData = profile.data
-                    dailyGoal = profile.suggestedCalories
-                    proteinTarget = profile.suggestedProteinG
+                    dailyGoal = goalValue
+                    proteinTarget = proteinValue
                     dismiss()
                 }
             }
