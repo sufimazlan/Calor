@@ -28,7 +28,7 @@ enum EntrySource: String {
     case manual, photo
 }
 
-enum Confidence: String {
+enum Confidence: String, Codable {
     case low, medium, high
 }
 

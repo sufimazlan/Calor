@@ -5,7 +5,7 @@
 | **Product** | Calor — personal calorie tracker (iOS native) |
 | **Owner** | Sufi |
 | **Users** | Sufi and his wife (2 iPhones) |
-| **Status** | Draft v0.2 |
+| **Status** | Draft v0.3 |
 | **Last updated** | 4 October 2026 |
 
 ---
@@ -38,7 +38,7 @@ These can be revisited after v1 (see section 12).
 
 | Constraint | Detail |
 |---|---|
-| **Platform** | iOS only, built with Swift + SwiftUI in Xcode on a Mac |
+| **Platform** | iPhone only (iOS 27), built with Swift + SwiftUI in Xcode on a Mac |
 | **Distribution** | Free Apple ID (Personal Team) signing. The app expires after 7 days and is reinstalled weekly from Xcode (wireless install once paired). |
 | **AI provider** | Claude API, using an API key from the Claude Console (pay-as-you-go). A Claude Pro subscription does not cover API usage from an app. |
 | **Developer experience** | Beginner in iOS development. Keep the architecture simple and avoid third-party libraries unless needed. |
@@ -62,9 +62,13 @@ Priority: **P0** = must have for v1, **P1** = should have for v1, **P2** = later
 
 ### 6.1 Today screen (home) — P0
 
-- Shows today's date, total calories eaten, daily goal and calories remaining (a progress ring or bar).
+The app is **photo-first**: snapping or uploading a photo is the main way to log a meal.
+
+- Shows today's date, total calories eaten, daily goal and calories remaining (a progress ring).
+- **What's next** card: a short tip worked out on the phone from today's numbers and the time of day (e.g. "800 kcal left for dinner and anything after", "You're 200 kcal over, keep the rest of today light", or a nudge when protein is low). No API call, so it's free and works offline.
 - Lists today's entries grouped by meal (Breakfast, Lunch, Dinner, Snack), showing name, calories and a thumbnail if there is a photo.
-- Prominent **"Snap meal"** button and a smaller **"Add manually"** button.
+- Two main buttons: **Snap meal** (camera) and **Upload** (photo library). In the simulator, which has no camera, only Upload is shown.
+- A small **Add manually instead** link, kept as a fallback for when a photo isn't possible (no internet, analysis failed, monthly budget reached).
 - Swipe to delete an entry; tap an entry to edit it.
 
 ### 6.2 Manual entry — P0
@@ -117,13 +121,26 @@ These keep each analysis to roughly 1,000 input and 250 output tokens.
 - User sets a daily calorie goal in Settings (default 2,000 kcal).
 - Each phone stores its own goal.
 
-### 6.5 History — P1
+### 6.5 Trends tab — P1
+
+Calculated entirely on the phone (free, offline). No Claude call.
+
+- 7-day bar chart of daily calories with the goal as a dashed line. Tap a bar to see that day's total.
+- This week: daily average, days within goal, and logging streak (days in a row with at least one entry).
+- Macro split for the last 7 days: share of calories from protein, carbs and fat, and grams per day.
+- One-line insight, e.g. "You're averaging 150 kcal a day under your goal."
+
+### 6.5b History — P1
 
 - **Log again:** on any past entry, tap **Log again** to copy it into today (name, portion, calories, macros) with no API call. — P1
 
 - A list of past days showing the daily total vs goal.
 - Tap a day to see its entries (same layout as the Today screen).
 - A simple 7-day bar chart of daily calories (Swift Charts). — P1
+
+### 6.5c Demo mode (until the API key is set up)
+
+Until a Claude API key is added, photo analysis returns realistic sample results (clearly labelled "Demo result") so the whole snap → review → save flow can be built and tested in the simulator without any API cost. Real analysis replaces it in milestone 3.
 
 ### 6.6 Settings — P0
 
@@ -138,7 +155,7 @@ These keep each analysis to roughly 1,000 input and 250 output tokens.
 - Shared log or sync between the two phones (CloudKit).
 - Apple Health integration.
 - Home screen widget showing calories remaining.
-- Weekly summary written by Claude.
+- Weekly summary written by Claude (decided against for now: on-device trends cover it for free).
 
 ## 7. Data model (SwiftData)
 

@@ -21,6 +21,14 @@ struct SettingsView: View {
                 } footer: {
                     Text("Each phone keeps its own goal.")
                 }
+
+                Section {
+                    LabeledContent("Mode", value: "Demo")
+                } header: {
+                    Text("Photo analysis")
+                } footer: {
+                    Text("Photos get sample results for now. Real Claude analysis starts once an API key is added here.")
+                }
             }
             .navigationTitle("Settings")
             .toolbar {

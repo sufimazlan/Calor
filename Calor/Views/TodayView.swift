@@ -5,8 +5,11 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
+import UIKit
 
-/// Home screen: today's total against the goal, and today's entries grouped by meal.
+/// Home screen: today's total against the goal, what to do next, and today's
+/// entries grouped by meal. Snapping or uploading a photo is the main action.
 struct TodayView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var day = Calendar.current.startOfDay(for: .now)
@@ -36,6 +39,11 @@ private struct DayLog: View {
     @State private var isShowingSettings = false
     @State private var editingEntry: FoodEntry?
 
+    @State private var isShowingCamera = false
+    @State private var capturedImage: UIImage?
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var analysisPhoto: MealPhoto?
+
     init(day: Date) {
         self.day = day
         let start = day
@@ -50,6 +58,17 @@ private struct DayLog: View {
         entries.reduce(0) { $0 + $1.calories }
     }
 
+    private var whatsNext: String {
+        Advice.whatsNext(
+            eaten: totalCalories,
+            goal: dailyGoal,
+            proteinG: entries.compactMap(\.proteinG).reduce(0, +),
+            carbsG: entries.compactMap(\.carbsG).reduce(0, +),
+            fatG: entries.compactMap(\.fatG).reduce(0, +),
+            hasEntries: !entries.isEmpty
+        )
+    }
+
     var body: some View {
         List {
             Section {
@@ -59,10 +78,12 @@ private struct DayLog: View {
                 Text(day, format: .dateTime.weekday(.wide).day().month(.wide))
             }
 
-            if entries.isEmpty {
-                Section {
-                    Text("Nothing logged yet today.")
-                        .foregroundStyle(.secondary)
+            Section("What's next") {
+                Label {
+                    Text(whatsNext)
+                } icon: {
+                    Image(systemName: "lightbulb.fill")
+                        .foregroundStyle(.yellow)
                 }
             }
 
@@ -94,16 +115,7 @@ private struct DayLog: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            // "Snap meal" joins this button in milestone 3.
-            Button {
-                isAddingEntry = true
-            } label: {
-                Label("Add manually", systemImage: "square.and.pencil")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .padding()
+            photoButtons
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -121,6 +133,68 @@ private struct DayLog: View {
         .sheet(isPresented: $isShowingSettings) {
             SettingsView()
         }
+        .sheet(item: $analysisPhoto) { photo in
+            AnalysisView(photo: photo)
+        }
+        .fullScreenCover(isPresented: $isShowingCamera, onDismiss: analyzeCapturedImage) {
+            CameraPicker { capturedImage = $0 }
+                .ignoresSafeArea()
+        }
+        .onChange(of: pickerItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    analysisPhoto = MealPhoto(image: image)
+                }
+                pickerItem = nil
+            }
+        }
+    }
+
+    /// Snap (camera) and Upload (photo library) are the main actions.
+    /// Manual entry is a small fallback for when a photo isn't possible.
+    private var photoButtons: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                if CameraPicker.isAvailable {
+                    Button {
+                        isShowingCamera = true
+                    } label: {
+                        Label("Snap meal", systemImage: "camera.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    PhotosPicker(selection: $pickerItem, matching: .images) {
+                        Label("Upload", systemImage: "photo.on.rectangle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    // The simulator has no camera.
+                    PhotosPicker(selection: $pickerItem, matching: .images) {
+                        Label("Upload meal photo", systemImage: "photo.on.rectangle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .controlSize(.large)
+
+            Button("Add manually instead") {
+                isAddingEntry = true
+            }
+            .font(.footnote)
+        }
+        .padding()
+        .background(.bar)
+    }
+
+    private func analyzeCapturedImage() {
+        guard let capturedImage else { return }
+        analysisPhoto = MealPhoto(image: capturedImage)
+        self.capturedImage = nil
     }
 }
 

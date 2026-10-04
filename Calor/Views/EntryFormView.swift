@@ -60,7 +60,7 @@ struct EntryFormView: View {
                     LabeledContent("Calories") {
                         TextField("kcal", text: $caloriesText)
                             .multilineTextAlignment(.trailing)
-                            .numericKeyboard()
+                            .keyboardType(.numberPad)
                     }
                     TextField("Portion, e.g. 1 plate (optional)", text: $portion)
                 } footer: {
@@ -106,7 +106,7 @@ struct EntryFormView: View {
         LabeledContent(title) {
             TextField("g", text: text)
                 .multilineTextAlignment(.trailing)
-                .numericKeyboard(decimal: true)
+                .keyboardType(.decimalPad)
         }
     }
 
@@ -150,19 +150,6 @@ struct EntryFormView: View {
     private static func text(for grams: Double?) -> String {
         guard let grams else { return "" }
         return grams.formatted(.number.precision(.fractionLength(0...1)).grouping(.never))
-    }
-}
-
-private extension View {
-    /// Number keyboard on iPhone. The project also lists Mac as a platform,
-    /// where this modifier doesn't exist.
-    @ViewBuilder
-    func numericKeyboard(decimal: Bool = false) -> some View {
-        #if os(iOS)
-        keyboardType(decimal ? .decimalPad : .numberPad)
-        #else
-        self
-        #endif
     }
 }
 

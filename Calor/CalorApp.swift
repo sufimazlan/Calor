@@ -12,7 +12,7 @@ import SwiftData
 struct CalorApp: App {
     var body: some Scene {
         WindowGroup {
-            TodayView()
+            RootView()
         }
         .modelContainer(for: FoodEntry.self)
     }
