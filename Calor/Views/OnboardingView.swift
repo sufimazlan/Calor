@@ -118,16 +118,18 @@ struct OnboardingView: View {
                 }
             }
             if profile.goal != .maintain {
-                Text("How fast?")
+                Text("How fast, per week?")
                     .font(.headline)
                     .padding(.top, 8)
                 Picker("Pace", selection: $profile.paceKgPerWeek) {
                     ForEach(profile.goal.paceOptions, id: \.self) { pace in
-                        Text("\(pace.formatted()) kg/week").tag(pace)
+                        Text("\(pace.formatted()) kg").tag(pace)
                     }
                 }
                 .pickerStyle(.segmented)
-                Text("Slower is easier to stick to.")
+                Text(profile.paceKgPerWeek >= 1
+                     ? "1 kg a week is fast and hard to keep up. Your goal may be raised to the safe minimum."
+                     : "Slower is easier to stick to.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

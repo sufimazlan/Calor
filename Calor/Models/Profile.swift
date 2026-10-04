@@ -62,7 +62,7 @@ enum WeightGoal: String, CaseIterable, Identifiable, Codable {
     /// Weekly pace choices in kg. Empty for maintain.
     var paceOptions: [Double] {
         switch self {
-        case .lose: [0.25, 0.5, 0.75]
+        case .lose: [0.25, 0.5, 0.75, 1]
         case .gain: [0.25, 0.5]
         case .maintain: []
         }

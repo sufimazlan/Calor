@@ -66,7 +66,7 @@ On first launch, about 30 seconds of questions work out personal targets instead
 
 1. Sex, birth year, height, weight.
 2. Activity level: mostly sitting / lightly active / active / very active.
-3. Goal: lose, maintain or gain weight, with pace (lose 0.25 / 0.5 / 0.75 kg a week; gain 0.25 / 0.5).
+3. Goal: lose, maintain or gain weight, with pace (lose 0.25 / 0.5 / 0.75 / 1 kg a week; gain 0.25 / 0.5).
 4. Result screen: suggested daily goal (adjustable in 50 kcal steps) and protein target, with the breakdown.
 
 **Calculations (on the phone):**
