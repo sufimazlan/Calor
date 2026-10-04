@@ -15,6 +15,7 @@ enum Advice {
         carbsG: Double,
         fatG: Double,
         proteinTargetG: Int,
+        diet: DietType = .balanced,
         hasEntries: Bool,
         now: Date = .now
     ) -> String {
@@ -48,7 +49,7 @@ enum Advice {
         // Protein check, only when macros were logged.
         let macroCalories = proteinG * 4 + carbsG * 4 + fatG * 9
         guard macroCalories > 0 else { return tip }
-        let proteinIdea = "Eggs, chicken, fish, tofu or tempeh would help at your next meal."
+        let proteinIdea = "\(diet.proteinIdeas) would help at your next meal."
         if proteinTargetG > 0 {
             // Expect about half the target by mid-afternoon and three quarters by evening.
             let expectedShare = hour >= 19 ? 0.75 : (hour >= 15 ? 0.5 : 0)

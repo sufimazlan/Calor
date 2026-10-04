@@ -67,7 +67,7 @@ struct ProfileEditView: View {
             }
 
             Section {
-                Button("Answer step by step instead", systemImage: "list.number") {
+                Button("Answer step by step (like the first setup)", systemImage: "list.number") {
                     profileDataBeforeRedo = profileData
                     isRedoingSetup = true
                 }
@@ -81,27 +81,25 @@ struct ProfileEditView: View {
                         Text(sex.title).tag(sex)
                     }
                 }
-                Picker("Birth year", selection: $profile.birthYear) {
-                    ForEach(Array(Profile.birthYearRange.reversed()), id: \.self) { year in
-                        Text(String(year)).tag(year)
-                    }
-                }
+                DatePicker("Birthday", selection: $profile.birthDate, in: Profile.birthDateRange,
+                           displayedComponents: .date)
                 Picker("Height", selection: $profile.heightCm) {
                     ForEach(Profile.heightRange, id: \.self) { cm in
                         Text("\(cm) cm").tag(cm)
                     }
                 }
-                Picker("Weight", selection: $profile.weightKg) {
-                    ForEach(Profile.weightRange, id: \.self) { kg in
-                        Text("\(kg) kg").tag(kg)
-                    }
+                Stepper(value: $profile.weightKg, in: Profile.weightRange, step: 0.5) {
+                    LabeledContent("Weight", value: profile.weightText(profile.weightKg))
                 }
             }
 
-            Section("Lifestyle") {
-                Picker("Activity", selection: $profile.activity) {
-                    ForEach(ActivityLevel.allCases) { level in
+            Section("Goal") {
+                Picker("Workouts", selection: $profile.activity) {
+                    ForEach(ActivityLevel.choices) { level in
                         Text(level.title).tag(level)
+                    }
+                    if profile.activity == .light {
+                        Text(ActivityLevel.light.title).tag(ActivityLevel.light)
                     }
                 }
                 Picker("Goal", selection: $profile.goal) {
@@ -110,10 +108,16 @@ struct ProfileEditView: View {
                     }
                 }
                 if profile.goal != .maintain {
-                    Picker("Pace", selection: $profile.paceKgPerWeek) {
-                        ForEach(profile.goal.paceOptions, id: \.self) { pace in
-                            Text("\(pace.formatted()) kg/week").tag(pace)
-                        }
+                    Stepper(value: $profile.targetWeightKg, in: Profile.weightRange, step: 0.5) {
+                        LabeledContent("Target weight", value: profile.weightText(profile.targetWeightKg))
+                    }
+                    Stepper(value: $profile.paceKgPerWeek, in: profile.goal.paceRange, step: 0.1) {
+                        LabeledContent("Pace", value: "\(profile.weightText(profile.paceKgPerWeek))/week")
+                    }
+                }
+                Picker("Diet", selection: $profile.diet) {
+                    ForEach(DietType.allCases) { diet in
+                        Text(diet.title).tag(diet)
                     }
                 }
             }
@@ -153,7 +157,10 @@ struct ProfileEditView: View {
             OnboardingView(isRedo: true)
         }
         .onChange(of: profile.goal) {
-            profile.normalizePace()
+            profile.normalize()
+        }
+        .onChange(of: profile.weightKg) {
+            profile.normalize()
         }
         .onChange(of: photoItem) { _, item in
             guard let item else { return }

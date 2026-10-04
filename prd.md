@@ -5,7 +5,7 @@
 | **Product** | Calor — personal calorie tracker (iOS native) |
 | **Owner** | Sufi |
 | **Users** | Sufi and his wife (2 iPhones) |
-| **Status** | Draft v0.4 |
+| **Status** | Draft v0.5 |
 | **Last updated** | 4 October 2026 |
 
 ---
@@ -60,29 +60,52 @@ These can be revisited after v1 (see section 12).
 
 Priority: **P0** = must have for v1, **P1** = should have for v1, **P2** = later.
 
-### 6.0 First-launch profile — P0
+### 6.0 First-launch setup — P0
 
-On first launch, about 30 seconds of questions work out personal targets instead of a flat 2,000 kcal:
+Styled after Cal AI's onboarding (reference screenshots IMG_0299–0333): white screens, one question each, big bold titles with a grey subtitle, outlined option cards with an icon and a radio button, a round back button with a thin progress line, and a black pill **Continue** that stays grey until an option is picked. Everything is calculated on the phone.
 
-1. Name (optional), sex, birth year, height, weight.
-2. Activity level: mostly sitting / lightly active / active / very active.
-3. Goal: lose, maintain or gain weight, with pace (lose 0.25 / 0.5 / 0.75 / 1 kg a week; gain 0.25 / 0.5).
-4. Result screen: suggested daily goal (adjustable in 50 kcal steps) and protein target, with the breakdown, plus a live projection for the chosen goal: daily deficit or surplus, "lose 1 kg every N days", and kg per week, per month and in 3 months. A warning shows below the safe minimum or faster than 1 kg a week. The same projection appears under the goal in Settings.
+**Flow (first launch):**
 
-**Calculations (on the phone):**
+1. **Welcome:** Calor logo, phone mockup of the meal scanner, "Calorie tracking made easy", **Get Started**.
+2. **Name** (optional).
+3. **Sex:** male / female.
+4. **Workouts per week:** 0–2 / 3–5 / 6+ (activity multiplier 1.2 / 1.55 / 1.725).
+5. **Birthday:** month / day / year wheel.
+6. *Info:* "Designed to help you stay on track" (weight trend with Calor vs. without a plan).
+7. **Height:** wheel, cm or ft/in.
+8. **Weight:** swipeable ruler (0.1 steps), kg or lb.
+9. **Goal:** lose / maintain / gain.
+10. **Desired weight:** ruler. *(Skipped for maintain, as are 11–12.)*
+11. *Info:* "Losing 10 kg starts with a plan!"
+12. **Speed:** slider 0.1–1.5 kg a week (gain 0.1–1.0) with Slow / Recommended / Fast, "You should reach your goal in 5 months" and the daily calorie goal. At the safe minimum it shows the real weekly pace.
+13. *Info:* "A simpler way to stay on track" (without vs. with Calor).
+14. **Diet:** balanced, whole-food, Mediterranean, flexitarian, pescatarian, vegetarian, vegan, low-carb, keto, paleo. Used to tailor protein suggestions in tips.
+15. **What's stopping you** (one choice) and 16. **What would you like to accomplish** (one choice). Stored for future personalisation.
+17. *Info:* "You have great potential to crush your goal".
+18. **Rollover:** carry up to 200 unused kcal from yesterday into today? Yes / No.
+19. **Meal reminders:** asks for notification permission; daily reminders at 8:00, 12:30 and 19:00 (times editable in Settings).
+20. *All done:* "Time to generate your custom plan!"
+21. *Building:* animated 0–100% with checkmarks (about 2.5 s).
+22. **Your plan:** "Goal: lose 10 kg by 20 December", an estimated progress curve, editable tiles for calories, protein, carbs and fats, and the weight-change projection. **Let's get started!**
+
+Skipped from Cal AI: splash screen, "Other" sex (the calorie formula needs male or female), personal trainer question, Apple Health (later), sign-in (no accounts).
+
+**Calculations:**
 
 - BMR with Mifflin–St Jeor: 10 × kg + 6.25 × cm − 5 × age, +5 for men or −161 for women.
-- Maintenance = BMR × activity multiplier (1.2 / 1.375 / 1.55 / 1.725).
-- Goal = maintenance ∓ pace × 7,700 kcal ÷ 7 (0.5 kg a week ≈ 550 kcal a day), never below 1,500 kcal for men or 1,200 kcal for women. Rounded to 10 kcal.
-- Protein target = 1.6 g per kg when losing or gaining, 1.2 g per kg when maintaining.
+- Maintenance = BMR × workout multiplier.
+- Goal = maintenance ∓ pace × 7,700 kcal ÷ 7, never below 1,500 kcal for men or 1,200 kcal for women. Rounded to 10 kcal.
+- Goal date = kg to go ÷ real weekly change (from the daily goal vs. maintenance).
+- Protein = 1.6 g per kg when losing or gaining, 1.2 g per kg when maintaining. Fat = 30% of calories. Carbs = the rest. Carbs and fat can be set by hand.
 
-The profile is stored only on the phone and is never sent to Claude. It also holds an optional **name and profile photo** (resized to 300 px), shown as an avatar button at the top right of Today. Tapping the avatar opens the profile form, which can also replay the step-by-step questions; Settings has the same options. Saving recalculates both targets. The daily goal and protein target can also be fine-tuned by hand.
+The profile (and optional name and photo) is stored only on the phone and never sent to Claude. Older saved profiles still load. **Answer step by step** (from Profile or Settings) replays the questions with current answers filled in, skipping the welcome and info screens.
 
 ### 6.1 Today screen (home) — P0
 
 The app is **photo-first**: snapping or uploading a photo is the main way to log a meal.
 
 - Shows today's date, total calories eaten, daily goal and calories remaining (a progress ring), plus protein eaten against the protein target.
+- **Rollover** (if on): up to 200 kcal left over yesterday is added to today's goal, shown as "+150 rolled over" under the ring.
 - **What's next** card: a short tip worked out on the phone from today's numbers and the time of day (e.g. "800 kcal left for dinner and anything after", "You're 200 kcal over, keep the rest of today light", or a nudge when protein is low). No API call, so it's free and works offline.
 - Lists today's entries grouped by meal (Breakfast, Lunch, Dinner, Snack), showing name, calories and a thumbnail if there is a photo.
 - Two main buttons: **Snap meal** (camera) and **Upload** (photo library). In the simulator, which has no camera, only Upload is shown.
@@ -205,6 +228,9 @@ Until a Claude API key is added, photo analysis returns realistic sample results
 
 - profile: the 6.0 answers as JSON (missing until first-launch setup is finished)
 - dailyGoalKcal: Int (from the profile; default 2000)
+- carbsTargetG, fatTargetG: Int (0 = automatic)
+- rolloverEnabled: Bool
+- remindersEnabled: Bool, plus breakfast / lunch / dinner reminder times
 - proteinTargetG: Int (from the profile; 0 = off)
 - selectedModel: String (default `claude-haiku-4-5-20251001`)
 - monthlyBudgetUSD: Double (default 5.00, max 5.00)

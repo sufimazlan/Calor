@@ -12,6 +12,8 @@ struct CalorieSummary: View {
     let goal: Int
     var proteinG: Int?
     var proteinTargetG: Int?
+    /// Calories carried over from yesterday and already included in `goal`.
+    var rollover = 0
 
     private var remaining: Int { goal - eaten }
     private var isOver: Bool { remaining < 0 }
@@ -35,6 +37,12 @@ struct CalorieSummary: View {
                     Text(isOver ? "kcal over" : "kcal left")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                    if rollover > 0 {
+                        Label("+\(rollover) rolled over", systemImage: "arrow.uturn.forward")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.blue)
+                            .padding(.top, 2)
+                    }
                 }
             }
             .frame(width: 180, height: 180)

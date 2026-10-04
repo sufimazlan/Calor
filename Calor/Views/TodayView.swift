@@ -47,7 +47,13 @@ private struct DayLog: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
     @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
+    @AppStorage(SettingsKey.carbsTargetG) private var carbsTarget = 0
+    @AppStorage(SettingsKey.fatTargetG) private var fatTarget = 0
+    @AppStorage(SettingsKey.rolloverEnabled) private var rolloverEnabled = false
+    @AppStorage(SettingsKey.profile) private var profileData: Data?
     @Query private var entries: [FoodEntry]
+    /// Yesterday's entries, for rolling over unused calories.
+    @Query private var yesterdayEntries: [FoodEntry]
 
     @State private var isAddingEntry = false
     @State private var isShowingSettings = false
@@ -69,6 +75,22 @@ private struct DayLog: View {
             filter: #Predicate<FoodEntry> { $0.timestamp >= start && $0.timestamp < end },
             sort: \FoodEntry.timestamp
         )
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: start) ?? start
+        _yesterdayEntries = Query(
+            filter: #Predicate<FoodEntry> { $0.timestamp >= yesterday && $0.timestamp < start }
+        )
+    }
+
+    /// Calories left over yesterday (up to the limit), added to today's goal
+    /// when rollover is on. Only counts if something was logged yesterday.
+    private var rollover: Int {
+        guard rolloverEnabled, !yesterdayEntries.isEmpty else { return 0 }
+        let leftover = dailyGoal - yesterdayEntries.reduce(0) { $0 + $1.calories }
+        return min(max(leftover, 0), SettingsKey.maxRollover)
+    }
+
+    private var todayGoal: Int {
+        dailyGoal + rollover
     }
 
     private var totalCalories: Int {
@@ -82,11 +104,12 @@ private struct DayLog: View {
     private var whatsNext: String {
         Advice.whatsNext(
             eaten: totalCalories,
-            goal: dailyGoal,
+            goal: todayGoal,
             proteinG: totalProteinG,
             carbsG: entries.compactMap(\.carbsG).reduce(0, +),
             fatG: entries.compactMap(\.fatG).reduce(0, +),
             proteinTargetG: proteinTarget,
+            diet: Profile(data: profileData)?.diet ?? .balanced,
             hasEntries: !entries.isEmpty
         )
     }
@@ -95,8 +118,9 @@ private struct DayLog: View {
         ScrollViewReader { proxy in
             List {
                 Section {
-                    CalorieSummary(eaten: totalCalories, goal: dailyGoal,
-                                   proteinG: Int(totalProteinG.rounded()), proteinTargetG: proteinTarget)
+                    CalorieSummary(eaten: totalCalories, goal: todayGoal,
+                                   proteinG: Int(totalProteinG.rounded()), proteinTargetG: proteinTarget,
+                                   rollover: rollover)
                         .frame(maxWidth: .infinity)
                         .id(Self.topID)
                 } header: {
@@ -108,7 +132,8 @@ private struct DayLog: View {
                         proteinG: totalProteinG,
                         carbsG: entries.compactMap(\.carbsG).reduce(0, +),
                         fatG: entries.compactMap(\.fatG).reduce(0, +),
-                        targets: MacroTargets(calorieGoal: dailyGoal, proteinTargetG: proteinTarget)
+                        targets: MacroTargets(calorieGoal: dailyGoal, proteinTargetG: proteinTarget,
+                                              carbsTargetG: carbsTarget, fatTargetG: fatTarget)
                     )
                 } header: {
                     Text("Macros")

@@ -12,6 +12,8 @@ import Charts
 struct TrendsView: View {
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
     @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
+    @AppStorage(SettingsKey.carbsTargetG) private var carbsTarget = 0
+    @AppStorage(SettingsKey.fatTargetG) private var fatTarget = 0
     @AppStorage(SettingsKey.profile) private var profileData: Data?
     @Query private var entries: [FoodEntry]
     /// Switches to the Today tab when the Calor logo is tapped.
@@ -257,7 +259,8 @@ struct TrendsView: View {
         Section {
             if let macros = stats.averageMacros {
                 MacroProgressView(proteinG: macros.protein, carbsG: macros.carbs, fatG: macros.fat,
-                                  targets: MacroTargets(calorieGoal: dailyGoal, proteinTargetG: proteinTarget))
+                                  targets: MacroTargets(calorieGoal: dailyGoal, proteinTargetG: proteinTarget,
+                                                        carbsTargetG: carbsTarget, fatTargetG: fatTarget))
                 LabeledContent("Share of calories") {
                     Text(macros.shareSummary)
                         .monospacedDigit()
