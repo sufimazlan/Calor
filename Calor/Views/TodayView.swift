@@ -85,6 +85,21 @@ private struct DayLog: View {
                 Text(day, format: .dateTime.weekday(.wide).day().month(.wide))
             }
 
+            Section {
+                MacroProgressView(
+                    proteinG: totalProteinG,
+                    carbsG: entries.compactMap(\.carbsG).reduce(0, +),
+                    fatG: entries.compactMap(\.fatG).reduce(0, +),
+                    targets: MacroTargets(calorieGoal: dailyGoal, proteinTargetG: proteinTarget)
+                )
+            } header: {
+                Text("Macros")
+            } footer: {
+                if entries.contains(where: { $0.proteinG == nil }) {
+                    Text("Some entries have no macros, so these totals may be low.")
+                }
+            }
+
             Section("What's next") {
                 Label {
                     Text(whatsNext)

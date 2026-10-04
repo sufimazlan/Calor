@@ -141,12 +141,18 @@ These keep each analysis to roughly 1,000 input and 250 output tokens.
 
 ### 6.5 Trends tab — P1
 
-Calculated entirely on the phone (free, offline). No Claude call.
+Calculated entirely on the phone (free, offline). No Claude call. A **7 days / 30 days** switch at the top changes every section.
 
-- 7-day bar chart of daily calories with the goal as a dashed line. Tap a bar to see that day's total.
-- This week: daily average, days within goal, and logging streak (days in a row with at least one entry).
-- Macro split for the last 7 days: share of calories from protein, carbs and fat, and grams per day.
-- One-line insight, e.g. "You're averaging 150 kcal a day under your goal."
+- **Daily calories chart** with the goal as a dashed line. Tap a bar for that day's total and item count.
+- **Summary:** daily average, days within goal, logging streak, highest day, lowest day, items logged.
+- **Estimated weight change** (needs a profile): average intake vs. maintenance, estimated kg change over the logged days, and kg per week and per month at this pace (7,700 kcal ≈ 1 kg).
+- **By meal:** average calories and share for breakfast, lunch, dinner and snacks.
+- **Macros:** average protein, carbs and fat per day against targets, plus share of calories.
+- **Weekdays vs. weekends:** average calories for each.
+- **Top foods:** the 5 foods adding the most calories, with how often they were eaten.
+- **Insights:** short sentences picked from the numbers, e.g. "You eat about 300 kcal more on weekends", "Dinner is your biggest meal, 45% of your calories", "At this pace you'd lose about 1.8 kg a month".
+
+The Today screen also shows a **Macros** card: protein, carbs and fat eaten today against targets (protein from the profile, 30% of calories from fat, carbs for the rest).
 
 ### 6.5b History — P1
 
