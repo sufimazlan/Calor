@@ -139,39 +139,56 @@ struct OnboardingView: View {
         }
     }
 
-    @ViewBuilder
     private var resultContent: some View {
-        Text("Your daily goal")
-            .font(.title2.bold())
-        Text("\(goalValue.formatted()) kcal")
-            .font(.system(size: 52, weight: .bold))
-            .monospacedDigit()
-        Stepper("Adjust", value: Binding(
-            get: { goalValue },
-            set: { adjustedGoal = $0 }
-        ), in: 1000...5000, step: 50)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Your daily goal")
+                    .font(.title2.bold())
+                Text("\(goalValue.formatted()) kcal")
+                    .font(.system(size: 52, weight: .bold))
+                    .monospacedDigit()
+                Stepper("Adjust", value: Binding(
+                    get: { goalValue },
+                    set: { adjustedGoal = $0 }
+                ), in: 1000...5000, step: 50)
 
-        VStack(spacing: 10) {
-            LabeledContent("To maintain your weight", value: "\(profile.maintenanceCalories.formatted()) kcal")
-            if profile.goal != .maintain {
-                LabeledContent(
-                    "To \(profile.goal == .lose ? "lose" : "gain") \(profile.paceKgPerWeek.formatted()) kg/week",
-                    value: "\(profile.dailyAdjustment > 0 ? "+" : "−")\(abs(profile.dailyAdjustment).formatted()) kcal"
+                GoalProjectionView(
+                    maintenance: profile.maintenanceCalories,
+                    goal: goalValue,
+                    minimum: profile.minimumCalories
                 )
-            }
-            LabeledContent("Protein target", value: "\(profile.suggestedProteinG) g a day")
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+                .padding()
+                .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+                .animation(.default, value: goalValue)
 
-        if profile.isAtMinimum {
-            Text("Raised to \(profile.minimumCalories.formatted()) kcal, the usual minimum without a doctor's supervision.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                VStack(spacing: 10) {
+                    LabeledContent("To maintain your weight", value: "\(profile.maintenanceCalories.formatted()) kcal")
+                    if profile.goal != .maintain {
+                        LabeledContent(
+                            "Suggested to \(profile.goal == .lose ? "lose" : "gain") \(profile.paceKgPerWeek.formatted()) kg/week",
+                            value: "\(profile.suggestedCalories.formatted()) kcal"
+                        )
+                    }
+                    LabeledContent("Protein target", value: "\(profile.suggestedProteinG) g a day")
+                }
+                .padding()
+                .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+
+                if adjustedGoal != nil && adjustedGoal != profile.suggestedCalories {
+                    Button("Use suggested goal (\(profile.suggestedCalories.formatted()) kcal)") {
+                        adjustedGoal = nil
+                    }
+                } else if profile.isAtMinimum {
+                    Text("Raised to \(profile.minimumCalories.formatted()) kcal, the usual minimum without a doctor's supervision.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Text("You can change these any time in Settings.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
-        Text("You can change these any time in Settings.")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+        .scrollIndicators(.hidden)
     }
 
     private func question(_ title: String, hint: String? = nil) -> some View {

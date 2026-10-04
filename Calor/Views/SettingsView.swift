@@ -42,6 +42,17 @@ struct SettingsView: View {
                     Text("Calculated from your profile. Fine-tune them here. Each phone keeps its own.")
                 }
 
+                if let profile = Profile(data: profileData) {
+                    Section {
+                        GoalProjectionView(
+                            maintenance: profile.maintenanceCalories,
+                            goal: dailyGoal,
+                            minimum: profile.minimumCalories
+                        )
+                        .padding(.vertical, 4)
+                    }
+                }
+
                 Section {
                     LabeledContent("Mode", value: "Demo")
                 } header: {
