@@ -38,7 +38,6 @@ final class BackupFlow {
 
     func cancelRestore() {
         pendingRestore = nil
-        mergedMealCount = 0
     }
 
     func handleImport(_ result: Result<URL, Error>, context: ModelContext) {
@@ -62,16 +61,21 @@ final class BackupFlow {
     }
 
     private func useFolder(_ url: URL, context: ModelContext) {
-        let isFirstBackupOnThisInstall = BackupManager.lastBackupDate == nil
+        let previousPath = BackupManager.folderURL(refreshIfStale: false)?.standardizedFileURL.path
         do {
             try BackupManager.setFolder(url)
         } catch {
             setError("Couldn't use that folder: \(error.localizedDescription)")
             return
         }
+        // A different folder may hold another install's backups. Treat it like a first
+        // backup on this install, so its newest file is kept and offered below.
+        if previousPath != url.standardizedFileURL.path {
+            UserDefaults.standard.removeObject(forKey: SettingsKey.backupLastDate)
+        }
         // After a reinstall the folder may already hold a backup with more meals than
-        // this phone has: offer to restore it, keeping meals logged since the reinstall.
-        if isFirstBackupOnThisInstall, let newest = BackupManager.newestBackup() {
+        // this phone has: offer to restore it, keeping meals logged on this phone.
+        if BackupManager.lastBackupDate == nil, let newest = BackupManager.newestBackup() {
             let mealsHere = (try? context.fetchCount(FetchDescriptor<FoodEntry>())) ?? 0
             if newest.entries.count > mealsHere {
                 let merged = BackupManager.merging(newest, withMealsIn: context)
@@ -106,12 +110,13 @@ final class BackupFlow {
         cancelRestore()
     }
 
-    /// Explains exactly what a restore will do, including whether today's meals are kept.
+    /// Explains exactly what a restore will do, including whether meals already on this phone are kept.
     func restoreMessage(for backup: CalorBackup) -> String {
+        func meals(_ count: Int) -> String { count == 1 ? "1 meal" : "\(count) meals" }
         let date = backup.createdAt.formatted(date: .abbreviated, time: .shortened)
         let safety: String
         if BackupManager.folderURL(refreshIfStale: false) != nil {
-            safety = "What's on this phone now is saved first as a \"\(BackupManager.beforeRestorePrefix)\" file in your backup folder."
+            safety = "If this phone has meals, they're saved first as a \"\(BackupManager.beforeRestorePrefix) …\" file in your backup folder."
         } else if BackupManager.hasFolder {
             safety = "Your backup folder can't be opened right now, so if this phone has meals the restore will stop to keep them safe."
         } else {
@@ -119,9 +124,9 @@ final class BackupFlow {
         }
         if mergedMealCount > 0 {
             let backupMeals = backup.entries.count - mergedMealCount
-            return "This folder has a backup from \(date) with \(backupMeals) meals. Restoring it keeps the \(mergedMealCount) meals logged on this phone since, and brings back your profile and settings. \(safety)"
+            return "This folder has a backup from \(date) with \(meals(backupMeals)). Restoring it keeps the \(meals(mergedMealCount)) logged on this phone since, and brings back your profile and settings. \(safety)"
         }
-        return "Backup from \(date) with \(backup.entries.count) meals. All meals and settings on this phone will be replaced. \(safety)"
+        return "Backup from \(date) with \(meals(backup.entries.count)). All meals and settings on this phone will be replaced. \(safety)"
     }
 
     private func setError(_ text: String) {
@@ -144,7 +149,7 @@ struct BackupFlowPresenter: ViewModifier {
                                 isPresented: restoreDialogBinding,
                                 titleVisibility: .visible,
                                 presenting: flow.pendingRestore) { backup in
-                Button(flow.mergedMealCount > 0 ? "Restore and keep today's meals" : "Replace everything on this phone",
+                Button(flow.mergedMealCount > 0 ? "Restore and keep this phone's meals" : "Replace everything on this phone",
                        role: flow.mergedMealCount > 0 ? nil : .destructive) {
                     flow.restore(backup, context: modelContext)
                 }
