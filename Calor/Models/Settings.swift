@@ -14,4 +14,10 @@ enum SettingsKey {
 
     /// `Profile` encoded as JSON. Missing until onboarding is finished.
     static let profile = "profile"
+
+    /// Shown with the avatar at the top of Today. Optional.
+    static let userName = "userName"
+
+    /// Small JPEG (about 300 px) of the user's profile photo. Optional.
+    static let avatarJPEG = "avatarJPEG"
 }

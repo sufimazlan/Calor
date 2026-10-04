@@ -10,6 +10,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
     @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
     @AppStorage(SettingsKey.profile) private var profileData: Data?
+    @AppStorage(SettingsKey.userName) private var userName = ""
+    @AppStorage(SettingsKey.avatarJPEG) private var avatarData: Data?
     @State private var isRedoingSetup = false
 
     private var profileSummary: String {
@@ -24,7 +26,15 @@ struct SettingsView: View {
                     NavigationLink {
                         ProfileEditView()
                     } label: {
-                        LabeledContent("Edit profile", value: profileSummary)
+                        HStack(spacing: 12) {
+                            AvatarView(imageData: avatarData, name: userName, size: 40)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(userName.isEmpty ? "Edit profile" : userName)
+                                Text(profileSummary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                     Button("Redo setup questions") {
                         isRedoingSetup = true
@@ -32,7 +42,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Your profile")
                 } footer: {
-                    Text("Weight, height, activity and goal. Update your weight now and then to keep the goal accurate.")
+                    Text("Name, photo, weight, height, activity and goal. Update your weight now and then to keep the goal accurate.")
                 }
 
                 Section {

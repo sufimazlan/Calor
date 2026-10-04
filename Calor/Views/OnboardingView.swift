@@ -13,8 +13,10 @@ struct OnboardingView: View {
     @AppStorage(SettingsKey.profile) private var profileData: Data?
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
     @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
+    @AppStorage(SettingsKey.userName) private var savedName = ""
 
     @State private var profile: Profile
+    @State private var name: String
     @State private var step: Step
     /// The user's tweak to the suggested goal on the last screen, if any.
     @State private var adjustedGoal: Int?
@@ -27,15 +29,16 @@ struct OnboardingView: View {
         self.isRedo = isRedo
         let saved = isRedo ? Profile(data: UserDefaults.standard.data(forKey: SettingsKey.profile)) : nil
         _profile = State(initialValue: saved ?? Profile())
-        _step = State(initialValue: isRedo ? .sex : .welcome)
+        _name = State(initialValue: UserDefaults.standard.string(forKey: SettingsKey.userName) ?? "")
+        _step = State(initialValue: isRedo ? .name : .welcome)
     }
 
     private var firstStep: Step {
-        isRedo ? .sex : .welcome
+        isRedo ? .name : .welcome
     }
 
     private enum Step: Int, CaseIterable {
-        case welcome, sex, birthYear, height, weight, activity, goal, result
+        case welcome, name, sex, birthYear, height, weight, activity, goal, result
     }
 
     private var goalValue: Int {
@@ -82,6 +85,14 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
             Label("Stays on this phone. Never sent to Claude.", systemImage: "lock")
                 .foregroundStyle(.secondary)
+
+        case .name:
+            question("What should we call you?", hint: "Shown at the top of the app. You can add a photo later in your profile.")
+            TextField("Your name", text: $name)
+                .textContentType(.name)
+                .font(.title3)
+                .padding()
+                .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
 
         case .sex:
             question("What's your sex?", hint: "Men and women burn calories at slightly different rates.")
@@ -257,6 +268,7 @@ struct OnboardingView: View {
     }
 
     private func finish() {
+        savedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         dailyGoal = goalValue
         proteinTarget = profile.suggestedProteinG
         // Saved last: on first launch this switches the app to the main tabs.

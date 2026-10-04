@@ -14,6 +14,9 @@ enum ImageProcessing {
     /// Longest side of the small thumbnail saved with each entry.
     static let thumbnailMaxDimension: CGFloat = 200
 
+    /// Longest side of the profile photo.
+    static let avatarMaxDimension: CGFloat = 300
+
     static func analysisJPEG(from image: UIImage) -> Data? {
         resized(image, maxDimension: analysisMaxDimension)
             .jpegData(compressionQuality: analysisJPEGQuality)
@@ -22,6 +25,11 @@ enum ImageProcessing {
     static func thumbnailJPEG(from image: UIImage) -> Data? {
         resized(image, maxDimension: thumbnailMaxDimension)
             .jpegData(compressionQuality: 0.7)
+    }
+
+    static func avatarJPEG(from image: UIImage) -> Data? {
+        resized(image, maxDimension: avatarMaxDimension)
+            .jpegData(compressionQuality: 0.8)
     }
 
     /// Scales the image down (never up) so its longest side is `maxDimension`

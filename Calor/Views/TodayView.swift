@@ -167,14 +167,14 @@ private struct DayLog: View {
             ToolbarItem(placement: .topBarLeading) {
                 CalorLogoButton(action: goHome)
             }
-            ToolbarItem(placement: .primaryAction) {
-                Menu("Settings", systemImage: "gearshape") {
-                    Button("Update weight & goal", systemImage: "person.crop.circle") {
-                        isEditingProfile = true
-                    }
-                    Button("Settings", systemImage: "gearshape") {
-                        isShowingSettings = true
-                    }
+            ToolbarItem(placement: .topBarTrailing) {
+                UserButton {
+                    isEditingProfile = true
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Settings", systemImage: "gearshape") {
+                    isShowingSettings = true
                 }
             }
         }

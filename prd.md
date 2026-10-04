@@ -64,7 +64,7 @@ Priority: **P0** = must have for v1, **P1** = should have for v1, **P2** = later
 
 On first launch, about 30 seconds of questions work out personal targets instead of a flat 2,000 kcal:
 
-1. Sex, birth year, height, weight.
+1. Name (optional), sex, birth year, height, weight.
 2. Activity level: mostly sitting / lightly active / active / very active.
 3. Goal: lose, maintain or gain weight, with pace (lose 0.25 / 0.5 / 0.75 / 1 kg a week; gain 0.25 / 0.5).
 4. Result screen: suggested daily goal (adjustable in 50 kcal steps) and protein target, with the breakdown, plus a live projection for the chosen goal: daily deficit or surplus, "lose 1 kg every N days", and kg per week, per month and in 3 months. A warning shows below the safe minimum or faster than 1 kg a week. The same projection appears under the goal in Settings.
@@ -76,7 +76,7 @@ On first launch, about 30 seconds of questions work out personal targets instead
 - Goal = maintenance ∓ pace × 7,700 kcal ÷ 7 (0.5 kg a week ≈ 550 kcal a day), never below 1,500 kcal for men or 1,200 kcal for women. Rounded to 10 kcal.
 - Protein target = 1.6 g per kg when losing or gaining, 1.2 g per kg when maintaining.
 
-The profile is stored only on the phone and is never sent to Claude. It can be changed later in three ways: **Edit profile** (one form) or **Redo setup questions** (the same step-by-step screens, with current answers filled in) in Settings, or **Update weight & goal** from the gear menu on the Today screen. Saving recalculates both targets. The daily goal and protein target can also be fine-tuned by hand.
+The profile is stored only on the phone and is never sent to Claude. It also holds an optional **name and profile photo** (resized to 300 px), shown as an avatar button at the top right of Today. Tapping the avatar opens the profile form, which can also replay the step-by-step questions; Settings has the same options. Saving recalculates both targets. The daily goal and protein target can also be fine-tuned by hand.
 
 ### 6.1 Today screen (home) — P0
 

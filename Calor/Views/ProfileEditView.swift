@@ -4,6 +4,8 @@
 //
 
 import SwiftUI
+import PhotosUI
+import UIKit
 
 /// Edit the profile from Settings. Saving recalculates the calorie goal and protein target.
 struct ProfileEditView: View {
@@ -12,7 +14,13 @@ struct ProfileEditView: View {
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
     @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
 
+    @AppStorage(SettingsKey.userName) private var savedName = ""
+    @AppStorage(SettingsKey.avatarJPEG) private var savedAvatar: Data?
+
     @State private var profile: Profile
+    @State private var name: String
+    @State private var avatarData: Data?
+    @State private var photoItem: PhotosPickerItem?
     @State private var isRedoingSetup = false
     /// The user's tweaks to the calculated targets, if any.
     @State private var adjustedGoal: Int?
@@ -23,6 +31,8 @@ struct ProfileEditView: View {
     init() {
         let saved = Profile(data: UserDefaults.standard.data(forKey: SettingsKey.profile))
         _profile = State(initialValue: saved ?? Profile())
+        _name = State(initialValue: UserDefaults.standard.string(forKey: SettingsKey.userName) ?? "")
+        _avatarData = State(initialValue: UserDefaults.standard.data(forKey: SettingsKey.avatarJPEG))
     }
 
     private var goalValue: Int {
@@ -35,6 +45,27 @@ struct ProfileEditView: View {
 
     var body: some View {
         Form {
+            Section("You") {
+                HStack(spacing: 16) {
+                    AvatarView(imageData: avatarData, name: name, size: 72)
+                    VStack(alignment: .leading, spacing: 10) {
+                        PhotosPicker(selection: $photoItem, matching: .images) {
+                            Text(avatarData == nil ? "Add photo" : "Change photo")
+                        }
+                        if avatarData != nil {
+                            Button("Remove photo", role: .destructive) {
+                                avatarData = nil
+                            }
+                        }
+                    }
+                    // Several buttons in one Form row each need their own tap area.
+                    .buttonStyle(.borderless)
+                }
+                .padding(.vertical, 4)
+                TextField("Your name", text: $name)
+                    .textContentType(.name)
+            }
+
             Section {
                 Button("Answer step by step instead", systemImage: "list.number") {
                     profileDataBeforeRedo = profileData
@@ -124,6 +155,16 @@ struct ProfileEditView: View {
         .onChange(of: profile.goal) {
             profile.normalizePace()
         }
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    avatarData = ImageProcessing.avatarJPEG(from: image)
+                }
+                photoItem = nil
+            }
+        }
         .onChange(of: profile) {
             // New answers mean new calculated targets.
             adjustedGoal = nil
@@ -132,6 +173,8 @@ struct ProfileEditView: View {
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
+                    savedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    savedAvatar = avatarData
                     profileData = profile.data
                     dailyGoal = goalValue
                     proteinTarget = proteinValue
