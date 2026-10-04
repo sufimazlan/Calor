@@ -13,6 +13,9 @@ struct ProfileEditView: View {
     @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
 
     @State private var profile: Profile
+    @State private var isRedoingSetup = false
+    /// Saved profile when the step-by-step setup was opened, to tell if it was saved.
+    @State private var profileDataBeforeRedo: Data?
 
     init() {
         let saved = Profile(data: UserDefaults.standard.data(forKey: SettingsKey.profile))
@@ -21,6 +24,15 @@ struct ProfileEditView: View {
 
     var body: some View {
         Form {
+            Section {
+                Button("Answer step by step instead", systemImage: "list.number") {
+                    profileDataBeforeRedo = profileData
+                    isRedoingSetup = true
+                }
+            } footer: {
+                Text("Goes through the same questions as when you first installed the app.")
+            }
+
             Section("About you") {
                 Picker("Sex", selection: $profile.sex) {
                     ForEach(Sex.allCases) { sex in
@@ -74,6 +86,9 @@ struct ProfileEditView: View {
             }
         }
         .navigationTitle("Profile")
+        .fullScreenCover(isPresented: $isRedoingSetup, onDismiss: closeIfRedoSaved) {
+            OnboardingView(isRedo: true)
+        }
         .onChange(of: profile.goal) {
             profile.normalizePace()
         }
@@ -86,6 +101,15 @@ struct ProfileEditView: View {
                     dismiss()
                 }
             }
+        }
+    }
+}
+
+extension ProfileEditView {
+    /// The step-by-step setup already saved new targets, so there's nothing left to do here.
+    private func closeIfRedoSaved() {
+        if profileData != profileDataBeforeRedo {
+            dismiss()
         }
     }
 }
