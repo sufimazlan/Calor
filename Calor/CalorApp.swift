@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct CalorApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TodayView()
         }
+        .modelContainer(for: FoodEntry.self)
     }
 }
