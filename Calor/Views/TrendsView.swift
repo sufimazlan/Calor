@@ -14,6 +14,8 @@ struct TrendsView: View {
     @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
     @AppStorage(SettingsKey.profile) private var profileData: Data?
     @Query private var entries: [FoodEntry]
+    /// Switches to the Today tab when the Calor logo is tapped.
+    let goHome: () -> Void
 
     @State private var range = TrendRange.week
     @State private var selectedDate: Date?
@@ -28,7 +30,8 @@ struct TrendsView: View {
         var title: String { "\(rawValue) days" }
     }
 
-    init() {
+    init(goHome: @escaping () -> Void = {}) {
+        self.goHome = goHome
         let today = Calendar.current.startOfDay(for: .now)
         let start = Calendar.current.date(byAdding: .day, value: -29, to: today) ?? today
         _entries = Query(
@@ -97,6 +100,11 @@ struct TrendsView: View {
                 }
             }
             .navigationTitle("Trends")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    CalorLogoButton(action: goHome)
+                }
+            }
             .onChange(of: range) {
                 selectedDate = nil
             }

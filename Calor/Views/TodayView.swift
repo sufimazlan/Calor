@@ -11,12 +11,21 @@ import UIKit
 /// Home screen: today's total against the goal, what to do next, and today's
 /// entries grouped by meal. Snapping or uploading a photo is the main action.
 struct TodayView: View {
+    /// Changes when the Calor logo is tapped; Today then scrolls to the top.
+    let homeRequests: Int
+    let goHome: () -> Void
+
     @Environment(\.scenePhase) private var scenePhase
     @State private var day = Calendar.current.startOfDay(for: .now)
 
+    init(homeRequests: Int = 0, goHome: @escaping () -> Void = {}) {
+        self.homeRequests = homeRequests
+        self.goHome = goHome
+    }
+
     var body: some View {
         NavigationStack {
-            DayLog(day: day)
+            DayLog(day: day, homeRequests: homeRequests, goHome: goHome)
                 .navigationTitle("Today")
         }
         // Roll over to the new day if the app was left open past midnight.
@@ -30,6 +39,10 @@ struct TodayView: View {
 
 private struct DayLog: View {
     let day: Date
+    let homeRequests: Int
+    let goHome: () -> Void
+
+    private static let topID = "top"
 
     @Environment(\.modelContext) private var modelContext
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
@@ -46,8 +59,10 @@ private struct DayLog: View {
     @State private var pickerItem: PhotosPickerItem?
     @State private var analysisPhoto: MealPhoto?
 
-    init(day: Date) {
+    init(day: Date, homeRequests: Int, goHome: @escaping () -> Void) {
         self.day = day
+        self.homeRequests = homeRequests
+        self.goHome = goHome
         let start = day
         let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
         _entries = Query(
@@ -77,63 +92,71 @@ private struct DayLog: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                CalorieSummary(eaten: totalCalories, goal: dailyGoal,
-                               proteinG: Int(totalProteinG.rounded()), proteinTargetG: proteinTarget)
-                    .frame(maxWidth: .infinity)
-            } header: {
-                Text(day, format: .dateTime.weekday(.wide).day().month(.wide))
-            }
-
-            Section {
-                MacroProgressView(
-                    proteinG: totalProteinG,
-                    carbsG: entries.compactMap(\.carbsG).reduce(0, +),
-                    fatG: entries.compactMap(\.fatG).reduce(0, +),
-                    targets: MacroTargets(calorieGoal: dailyGoal, proteinTargetG: proteinTarget)
-                )
-            } header: {
-                Text("Macros")
-            } footer: {
-                if entries.contains(where: { $0.proteinG == nil }) {
-                    Text("Some entries have no macros, so these totals may be low.")
+        ScrollViewReader { proxy in
+            List {
+                Section {
+                    CalorieSummary(eaten: totalCalories, goal: dailyGoal,
+                                   proteinG: Int(totalProteinG.rounded()), proteinTargetG: proteinTarget)
+                        .frame(maxWidth: .infinity)
+                        .id(Self.topID)
+                } header: {
+                    Text(day, format: .dateTime.weekday(.wide).day().month(.wide))
                 }
-            }
 
-            Section("What's next") {
-                Label {
-                    Text(whatsNext)
-                } icon: {
-                    Image(systemName: "lightbulb.fill")
-                        .foregroundStyle(.yellow)
+                Section {
+                    MacroProgressView(
+                        proteinG: totalProteinG,
+                        carbsG: entries.compactMap(\.carbsG).reduce(0, +),
+                        fatG: entries.compactMap(\.fatG).reduce(0, +),
+                        targets: MacroTargets(calorieGoal: dailyGoal, proteinTargetG: proteinTarget)
+                    )
+                } header: {
+                    Text("Macros")
+                } footer: {
+                    if entries.contains(where: { $0.proteinG == nil }) {
+                        Text("Some entries have no macros, so these totals may be low.")
+                    }
                 }
-            }
 
-            ForEach(MealType.allCases) { meal in
-                let mealEntries = entries.filter { $0.mealType == meal }
-                if !mealEntries.isEmpty {
-                    Section {
-                        ForEach(mealEntries) { entry in
-                            Button {
-                                editingEntry = entry
-                            } label: {
-                                EntryRow(entry: entry)
+                Section("What's next") {
+                    Label {
+                        Text(whatsNext)
+                    } icon: {
+                        Image(systemName: "lightbulb.fill")
+                            .foregroundStyle(.yellow)
+                    }
+                }
+
+                ForEach(MealType.allCases) { meal in
+                    let mealEntries = entries.filter { $0.mealType == meal }
+                    if !mealEntries.isEmpty {
+                        Section {
+                            ForEach(mealEntries) { entry in
+                                Button {
+                                    editingEntry = entry
+                                } label: {
+                                    EntryRow(entry: entry)
+                                }
+                                .tint(.primary)
                             }
-                            .tint(.primary)
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                modelContext.delete(mealEntries[index])
+                            .onDelete { offsets in
+                                for index in offsets {
+                                    modelContext.delete(mealEntries[index])
+                                }
                             }
-                        }
-                    } header: {
-                        HStack {
-                            Text(meal.title)
-                            Spacer()
-                            Text("\(mealEntries.reduce(0) { $0 + $1.calories }.formatted()) kcal")
+                        } header: {
+                            HStack {
+                                Text(meal.title)
+                                Spacer()
+                                Text("\(mealEntries.reduce(0) { $0 + $1.calories }.formatted()) kcal")
+                            }
                         }
                     }
+                }
+            }
+            .onChange(of: homeRequests) {
+                withAnimation {
+                    proxy.scrollTo(Self.topID, anchor: .top)
                 }
             }
         }
@@ -141,6 +164,9 @@ private struct DayLog: View {
             photoButtons
         }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                CalorLogoButton(action: goHome)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Menu("Settings", systemImage: "gearshape") {
                     Button("Update weight & goal", systemImage: "person.crop.circle") {
