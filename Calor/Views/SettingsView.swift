@@ -111,6 +111,7 @@ struct SettingsView: View {
                 }
 
                 BackupSettingsSection()
+                InstallSettingsSection()
 
                 Section {
                     LabeledContent("Mode", value: "Demo")

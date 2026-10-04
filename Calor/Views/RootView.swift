@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 /// Shows the first-launch questions until a profile exists, then the main tabs.
 struct RootView: View {
@@ -34,7 +35,7 @@ struct RootView: View {
                 BackupManager.backUpIfNeeded(context: modelContext, minimumAge: 20 * 60 * 60)
             case .background:
                 // Capture meals logged since the last backup.
-                BackupManager.backUpIfNeeded(context: modelContext, minimumAge: 15 * 60)
+                BackupManager.backUpOnLeave(context: modelContext)
             default:
                 break
             }

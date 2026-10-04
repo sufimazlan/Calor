@@ -43,6 +43,29 @@ private struct DayLog: View {
     let goHome: () -> Void
 
     private static let topID = "top"
+    private static let expiryBannerID = "expiryBanner"
+    private static let backupFailureID = "backupFailure"
+    private static let backupPromptID = "backupPrompt"
+
+    private var showsExpiryBanner: Bool {
+        InstallInfo.expiresSoon && InstallInfo.expirationDate != nil
+    }
+
+    private var showsBackupFailure: Bool {
+        backupFolderBookmark != nil && !backupLastError.isEmpty
+    }
+
+    private var showsBackupPrompt: Bool {
+        backupFolderBookmark == nil && !backupPromptDismissed && !entries.isEmpty
+    }
+
+    /// The first row on screen, so tapping the logo scrolls right to the top.
+    private var firstRowID: String {
+        if showsExpiryBanner { return Self.expiryBannerID }
+        if showsBackupFailure { return Self.backupFailureID }
+        if showsBackupPrompt { return Self.backupPromptID }
+        return Self.topID
+    }
 
     @Environment(\.modelContext) private var modelContext
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
@@ -53,12 +76,14 @@ private struct DayLog: View {
     @AppStorage(SettingsKey.profile) private var profileData: Data?
     @AppStorage(SettingsKey.backupFolderBookmark) private var backupFolderBookmark: Data?
     @AppStorage(SettingsKey.backupPromptDismissed) private var backupPromptDismissed = false
+    @AppStorage(SettingsKey.backupLastError) private var backupLastError = ""
     @Query private var entries: [FoodEntry]
     /// Yesterday's entries, for rolling over unused calories.
     @Query private var yesterdayEntries: [FoodEntry]
 
     @State private var isAddingEntry = false
     @State private var isShowingSettings = false
+    @State private var isSettingUpBackup = false
     @State private var isEditingProfile = false
     @State private var editingEntry: FoodEntry?
 
@@ -119,7 +144,7 @@ private struct DayLog: View {
     var body: some View {
         ScrollViewReader { proxy in
             List {
-                if InstallInfo.expiresSoon, let expiry = InstallInfo.expirationDate {
+                if showsExpiryBanner, let expiry = InstallInfo.expirationDate {
                     Section {
                         Label {
                             Text("Calor stops opening \(expiry.formatted(date: .abbreviated, time: .shortened)). Reinstall from Xcode on the Mac (⌘R) before then. Your meals are kept.")
@@ -128,10 +153,34 @@ private struct DayLog: View {
                                 .foregroundStyle(.orange)
                         }
                         .font(.subheadline)
+                        .id(Self.expiryBannerID)
                     }
                 }
 
-                if backupFolderBookmark == nil && !backupPromptDismissed && !entries.isEmpty {
+                if showsBackupFailure {
+                    Section {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label {
+                                Text("Backup isn't working")
+                                    .font(.headline)
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                            }
+                            Text(backupLastError)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Button("Fix backup") {
+                                isSettingUpBackup = true
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .padding(.vertical, 4)
+                        .id(Self.backupFailureID)
+                    }
+                }
+
+                if showsBackupPrompt {
                     Section {
                         VStack(alignment: .leading, spacing: 10) {
                             Label("Protect your meals", systemImage: "externaldrive.badge.checkmark")
@@ -141,7 +190,7 @@ private struct DayLog: View {
                                 .foregroundStyle(.secondary)
                             HStack {
                                 Button("Set up backup") {
-                                    isShowingSettings = true
+                                    isSettingUpBackup = true
                                 }
                                 .buttonStyle(.borderedProminent)
                                 Button("Not now") {
@@ -151,6 +200,7 @@ private struct DayLog: View {
                             }
                         }
                         .padding(.vertical, 4)
+                        .id(Self.backupPromptID)
                     }
                 }
 
@@ -218,7 +268,7 @@ private struct DayLog: View {
             }
             .onChange(of: homeRequests) {
                 withAnimation {
-                    proxy.scrollTo(Self.topID, anchor: .top)
+                    proxy.scrollTo(firstRowID, anchor: .top)
                 }
             }
         }
@@ -248,6 +298,19 @@ private struct DayLog: View {
         }
         .sheet(isPresented: $isShowingSettings) {
             SettingsView()
+        }
+        .sheet(isPresented: $isSettingUpBackup) {
+            NavigationStack {
+                Form {
+                    BackupSettingsSection()
+                }
+                .navigationTitle("Backup")
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { isSettingUpBackup = false }
+                    }
+                }
+            }
         }
         .sheet(isPresented: $isEditingProfile) {
             NavigationStack {

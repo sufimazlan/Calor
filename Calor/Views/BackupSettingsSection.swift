@@ -6,8 +6,10 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import UserNotifications
 
-/// Settings sections for automatic backup and the 7-day install expiry.
+/// Settings section for automatic backup: pick a folder once, see the last
+/// backup, back up now, and restore.
 struct BackupSettingsSection: View {
     @Environment(\.modelContext) private var modelContext
 
@@ -15,7 +17,6 @@ struct BackupSettingsSection: View {
     @AppStorage(SettingsKey.backupLastDate) private var lastBackupSeconds = 0.0
     @AppStorage(SettingsKey.backupLastError) private var lastError = ""
     @AppStorage(SettingsKey.backupIncludesPhotos) private var includesPhotos = true
-    @AppStorage(SettingsKey.reinstallRemindersEnabled) private var reinstallRemindersEnabled = true
 
     private enum ImportMode {
         case folder, restore
@@ -26,11 +27,12 @@ struct BackupSettingsSection: View {
     @State private var pendingRestore: CalorBackup?
     @State private var message: String?
 
-    private var folderName: String? {
-        folderBookmark == nil ? nil : BackupManager.folderURL()?.lastPathComponent
-    }
-
     var body: some View {
+        // Resolved once per render, without writing settings while drawing.
+        let folderName = folderBookmark == nil
+            ? nil
+            : BackupManager.folderURL(refreshIfStale: false)?.lastPathComponent
+
         Section {
             if let folderName {
                 LabeledContent("Folder", value: folderName)
@@ -53,9 +55,23 @@ struct BackupSettingsSection: View {
                     pickFolder()
                 }
             }
+            // The importer and dialog sit on one row that's always shown: on a whole
+            // Section inside a Form they would be repeated for every row.
             Button("Restore from a backup…", systemImage: "clock.arrow.circlepath") {
                 importMode = .restore
                 isImporting = true
+            }
+            .fileImporter(isPresented: $isImporting,
+                          allowedContentTypes: importMode == .folder ? [.folder] : [.json]) { result in
+                handleImport(result)
+            }
+            .confirmationDialog("Restore this backup?", isPresented: restoreDialogBinding,
+                                titleVisibility: .visible, presenting: pendingRestore) { backup in
+                Button("Replace everything on this phone", role: .destructive) {
+                    restore(backup)
+                }
+            } message: { backup in
+                Text("Backup from \(backup.createdAt.formatted(date: .abbreviated, time: .shortened)) with \(backup.entries.count) meals. All meals and settings on this phone will be replaced. What's here now is saved first as \"\(BackupManager.beforeRestoreFileName)\".")
             }
         } header: {
             Text("Automatic backup")
@@ -70,39 +86,8 @@ struct BackupSettingsSection: View {
                 }
                 Text(folderName == nil
                      ? "Pick a folder on this iPhone, for example create \"Calor Backups\" in On My iPhone. Calor then saves a backup there every day and keeps the last \(BackupManager.keepCount). Backups stay even if the app is deleted."
-                     : "Saved each day when you open or leave Calor. The last \(BackupManager.keepCount) days are kept. Each phone backs up to its own storage.")
+                     : "Saved when you open Calor each day and when you leave it. The last \(BackupManager.keepCount) days are kept. Each phone backs up to its own storage.")
             }
-        }
-        .fileImporter(isPresented: $isImporting,
-                      allowedContentTypes: importMode == .folder ? [.folder] : [.json]) { result in
-            handleImport(result)
-        }
-        .confirmationDialog("Restore this backup?", isPresented: restoreDialogBinding,
-                            titleVisibility: .visible, presenting: pendingRestore) { backup in
-            Button("Replace everything on this phone", role: .destructive) {
-                restore(backup)
-            }
-        } message: { backup in
-            Text("Backup from \(backup.createdAt.formatted(date: .abbreviated, time: .shortened)) with \(backup.entries.count) meals. All meals and settings on this phone will be replaced.")
-        }
-
-        Section {
-            if let expiry = InstallInfo.expirationDate {
-                LabeledContent("This install expires") {
-                    Text(expiry.formatted(date: .abbreviated, time: .shortened))
-                        .foregroundStyle(InstallInfo.expiresSoon ? Color.orange : Color.secondary)
-                }
-                Toggle("Remind me to reinstall", isOn: $reinstallRemindersEnabled)
-            } else {
-                LabeledContent("This install expires", value: "Never (simulator)")
-            }
-        } header: {
-            Text("App install")
-        } footer: {
-            Text("With a free Apple ID, apps installed from Xcode stop opening after 7 days. Reminders come 1 day and 1 hour before. To reinstall, open Xcode on the Mac and press ⌘R with this iPhone nearby. Your meals are kept.")
-        }
-        .onChange(of: reinstallRemindersEnabled) {
-            Task { await ReinstallReminders.reschedule() }
         }
     }
 
@@ -117,18 +102,14 @@ struct BackupSettingsSection: View {
     }
 
     private func handleImport(_ result: Result<URL, Error>) {
+        message = nil
         switch result {
         case .failure(let error):
             message = error.localizedDescription
         case .success(let url):
             switch importMode {
             case .folder:
-                do {
-                    try BackupManager.setFolder(url)
-                    backUpNow()
-                } catch {
-                    lastError = "Couldn't use that folder: \(error.localizedDescription)"
-                }
+                useFolder(url)
             case .restore:
                 do {
                     pendingRestore = try BackupManager.readBackup(from: url)
@@ -139,11 +120,34 @@ struct BackupSettingsSection: View {
         }
     }
 
+    private func useFolder(_ url: URL) {
+        let isFirstBackupOnThisInstall = BackupManager.lastBackupDate == nil
+        do {
+            try BackupManager.setFolder(url)
+        } catch {
+            lastError = "Couldn't use that folder: \(error.localizedDescription)"
+            return
+        }
+        // After a reinstall the folder may already hold backups with more meals than
+        // this phone has: offer to restore them instead of backing up straight away.
+        if isFirstBackupOnThisInstall, let newest = BackupManager.newestBackup() {
+            let mealsHere = (try? modelContext.fetchCount(FetchDescriptor<FoodEntry>())) ?? 0
+            if newest.entries.count > mealsHere {
+                pendingRestore = newest
+                return
+            }
+        }
+        backUpNow()
+    }
+
     private func backUpNow() {
         do {
-            try BackupManager.backUpNow(context: modelContext)
-            message = "Backed up."
+            let didWrite = try BackupManager.backUpNow(context: modelContext)
+            message = didWrite
+                ? "Backed up just now."
+                : "Nothing to back up yet. Log a meal first. Existing backups were left alone."
         } catch {
+            message = nil
             lastError = error.localizedDescription
         }
     }
@@ -154,7 +158,45 @@ struct BackupSettingsSection: View {
             message = "Restored \(backup.entries.count) meals."
             Task { await MealReminders.reschedule() }
         } catch {
-            message = "Restore failed: \(error.localizedDescription)"
+            message = "Restore failed, nothing was changed: \(error.localizedDescription)"
+        }
+    }
+}
+
+/// Settings section showing when this install stops opening (free Apple ID: 7 days),
+/// with the reinstall reminders switch.
+struct InstallSettingsSection: View {
+    @AppStorage(SettingsKey.reinstallRemindersEnabled) private var reinstallRemindersEnabled = true
+    @State private var notificationsDenied = false
+
+    var body: some View {
+        Section {
+            if let expiry = InstallInfo.expirationDate {
+                LabeledContent("This install expires") {
+                    Text(expiry.formatted(date: .abbreviated, time: .shortened))
+                        .foregroundStyle(InstallInfo.expiresSoon ? Color.orange : Color.secondary)
+                }
+                Toggle("Remind me to reinstall", isOn: $reinstallRemindersEnabled)
+                    .onChange(of: reinstallRemindersEnabled) {
+                        Task { await ReinstallReminders.reschedule() }
+                    }
+                    .task(id: reinstallRemindersEnabled) {
+                        notificationsDenied = await UNUserNotificationCenter.current()
+                            .notificationSettings().authorizationStatus == .denied
+                    }
+            } else {
+                LabeledContent("This install expires", value: "Never (simulator)")
+            }
+        } header: {
+            Text("App install")
+        } footer: {
+            VStack(alignment: .leading, spacing: 6) {
+                if reinstallRemindersEnabled && notificationsDenied {
+                    Text("Notifications are turned off for Calor, so these reminders can't arrive. Turn them on in the iPhone Settings app → Notifications → Calor.")
+                        .foregroundStyle(.red)
+                }
+                Text("With a free Apple ID, apps installed from Xcode stop opening after 7 days. Reminders come 1 day and 1 hour before. To reinstall, open Xcode on the Mac and press ⌘R with this iPhone nearby. Your meals are kept.")
+            }
         }
     }
 }
@@ -162,6 +204,7 @@ struct BackupSettingsSection: View {
 #Preview {
     Form {
         BackupSettingsSection()
+        InstallSettingsSection()
     }
     .modelContainer(for: FoodEntry.self, inMemory: true)
 }

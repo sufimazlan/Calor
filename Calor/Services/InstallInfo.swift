@@ -58,14 +58,15 @@ enum ReinstallReminders {
             (identifiers[1], 60 * 60, "in 1 hour"),
         ]
         for reminder in reminders {
-            let fireDate = expiry.addingTimeInterval(-reminder.before)
-            guard fireDate > .now else { continue }
+            // Computed once: the trigger crashes on an interval of 0 or less.
+            let interval = expiry.timeIntervalSinceNow - reminder.before
+            guard interval >= 1 else { continue }
 
             let content = UNMutableNotificationContent()
             content.title = "Reinstall Calor from Xcode"
             content.body = "Calor stops opening \(reminder.when) (\(expiry.formatted(date: .abbreviated, time: .shortened))). Open Xcode on the Mac and press ⌘R with this iPhone nearby. Your meals are kept."
             content.sound = .default
-            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: fireDate.timeIntervalSinceNow, repeats: false)
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
             try? await center.add(UNNotificationRequest(identifier: reminder.id, content: content, trigger: trigger))
         }
     }

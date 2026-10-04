@@ -4,7 +4,9 @@
 //
 
 import SwiftUI
+import SwiftData
 import UIKit
+import UniformTypeIdentifiers
 
 /// First-launch setup, styled after Cal AI: one question per screen, then a
 /// personal plan with a goal date and editable targets. Everything is worked
@@ -12,6 +14,7 @@ import UIKit
 /// "Answer step by step" (redo), which skips the welcome and info screens.
 struct OnboardingView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @AppStorage(SettingsKey.profile) private var profileData: Data?
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
     @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
@@ -32,6 +35,10 @@ struct OnboardingView: View {
     @State private var carbsOverride: Int?
     @State private var fatOverride: Int?
     @State private var editingTarget: PlanTarget?
+    /// "Restore from a backup" on the welcome screen, e.g. after a reinstall.
+    @State private var isPickingBackup = false
+    @State private var pendingRestore: CalorBackup?
+    @State private var restoreMessage: String?
 
     private let isRedo: Bool
 
@@ -581,6 +588,35 @@ struct OnboardingView: View {
         case .welcome:
             footerContainer {
                 PrimaryPillButton(title: "Get Started", action: goForward)
+                if let restoreMessage {
+                    Text(restoreMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                secondaryButton("Restore from a backup") {
+                    isPickingBackup = true
+                }
+                .fileImporter(isPresented: $isPickingBackup, allowedContentTypes: [.json]) { result in
+                    switch result {
+                    case .success(let url):
+                        do {
+                            pendingRestore = try BackupManager.readBackup(from: url)
+                        } catch {
+                            restoreMessage = "That file isn't a Calor backup."
+                        }
+                    case .failure(let error):
+                        restoreMessage = error.localizedDescription
+                    }
+                }
+                .confirmationDialog("Restore this backup?", isPresented: restoreDialogBinding,
+                                    titleVisibility: .visible, presenting: pendingRestore) { backup in
+                    Button("Restore \(backup.entries.count) meals") {
+                        restore(backup)
+                    }
+                } message: { backup in
+                    Text("Backup from \(backup.createdAt.formatted(date: .abbreviated, time: .shortened)), with your profile and settings.")
+                }
             }
         case .rollover:
             footerContainer {
@@ -675,6 +711,25 @@ struct OnboardingView: View {
         stepIndex -= 1
         if step == .building {
             stepIndex -= 1
+        }
+    }
+
+    private var restoreDialogBinding: Binding<Bool> {
+        Binding(get: { pendingRestore != nil },
+                set: { if !$0 { pendingRestore = nil } })
+    }
+
+    /// Restores meals, profile and settings. If the backup has a profile, saving
+    /// it switches the app straight to the main tabs; otherwise setup continues.
+    private func restore(_ backup: CalorBackup) {
+        do {
+            try BackupManager.restore(backup, context: modelContext)
+            Task { await MealReminders.reschedule() }
+            if backup.profile == nil {
+                restoreMessage = "Restored \(backup.entries.count) meals. Now answer a few questions to set your goal."
+            }
+        } catch {
+            restoreMessage = "Restore failed: \(error.localizedDescription)"
         }
     }
 
