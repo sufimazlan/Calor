@@ -76,7 +76,7 @@ On first launch, about 30 seconds of questions work out personal targets instead
 - Goal = maintenance ∓ pace × 7,700 kcal ÷ 7 (0.5 kg a week ≈ 550 kcal a day), never below 1,500 kcal for men or 1,200 kcal for women. Rounded to 10 kcal.
 - Protein target = 1.6 g per kg when losing or gaining, 1.2 g per kg when maintaining.
 
-The profile is stored only on the phone and is never sent to Claude. It can be edited later in Settings → Profile, and saving recalculates both targets. The daily goal and protein target can also be fine-tuned by hand.
+The profile is stored only on the phone and is never sent to Claude. It can be changed later in three ways: **Edit profile** (one form) or **Redo setup questions** (the same step-by-step screens, with current answers filled in) in Settings, or **Update weight & goal** from the gear menu on the Today screen. Saving recalculates both targets. The daily goal and protein target can also be fine-tuned by hand.
 
 ### 6.1 Today screen (home) — P0
 

@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
     @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
     @AppStorage(SettingsKey.profile) private var profileData: Data?
+    @State private var isRedoingSetup = false
 
     private var profileSummary: String {
         guard let profile = Profile(data: profileData) else { return "Not set" }
@@ -23,10 +24,15 @@ struct SettingsView: View {
                     NavigationLink {
                         ProfileEditView()
                     } label: {
-                        LabeledContent("Profile", value: profileSummary)
+                        LabeledContent("Edit profile", value: profileSummary)
                     }
+                    Button("Redo setup questions") {
+                        isRedoingSetup = true
+                    }
+                } header: {
+                    Text("Your profile")
                 } footer: {
-                    Text("Update your weight now and then to keep the goal accurate.")
+                    Text("Weight, height, activity and goal. Update your weight now and then to keep the goal accurate.")
                 }
 
                 Section {
@@ -62,6 +68,9 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .fullScreenCover(isPresented: $isRedoingSetup) {
+                OnboardingView(isRedo: true)
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

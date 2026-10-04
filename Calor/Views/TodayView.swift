@@ -38,6 +38,7 @@ private struct DayLog: View {
 
     @State private var isAddingEntry = false
     @State private var isShowingSettings = false
+    @State private var isEditingProfile = false
     @State private var editingEntry: FoodEntry?
 
     @State private var isShowingCamera = false
@@ -141,8 +142,13 @@ private struct DayLog: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Settings", systemImage: "gearshape") {
-                    isShowingSettings = true
+                Menu("Settings", systemImage: "gearshape") {
+                    Button("Update weight & goal", systemImage: "person.crop.circle") {
+                        isEditingProfile = true
+                    }
+                    Button("Settings", systemImage: "gearshape") {
+                        isShowingSettings = true
+                    }
                 }
             }
         }
@@ -154,6 +160,16 @@ private struct DayLog: View {
         }
         .sheet(isPresented: $isShowingSettings) {
             SettingsView()
+        }
+        .sheet(isPresented: $isEditingProfile) {
+            NavigationStack {
+                ProfileEditView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { isEditingProfile = false }
+                        }
+                    }
+            }
         }
         .sheet(item: $analysisPhoto) { photo in
             AnalysisView(photo: photo)

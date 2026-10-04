@@ -7,16 +7,32 @@ import SwiftUI
 import UIKit
 
 /// First-launch questions that work out a daily calorie goal and protein target.
-/// Shown until a profile is saved.
+/// Shown until a profile is saved, and again from Settings → Redo setup questions.
 struct OnboardingView: View {
+    @Environment(\.dismiss) private var dismiss
     @AppStorage(SettingsKey.profile) private var profileData: Data?
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
     @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
 
-    @State private var profile = Profile()
-    @State private var step = Step.welcome
+    @State private var profile: Profile
+    @State private var step: Step
     /// The user's tweak to the suggested goal on the last screen, if any.
     @State private var adjustedGoal: Int?
+
+    /// True when re-answering from Settings: answers start filled in,
+    /// the welcome screen is skipped, and the flow can be cancelled.
+    private let isRedo: Bool
+
+    init(isRedo: Bool = false) {
+        self.isRedo = isRedo
+        let saved = isRedo ? Profile(data: UserDefaults.standard.data(forKey: SettingsKey.profile)) : nil
+        _profile = State(initialValue: saved ?? Profile())
+        _step = State(initialValue: isRedo ? .sex : .welcome)
+    }
+
+    private var firstStep: Step {
+        isRedo ? .sex : .welcome
+    }
 
     private enum Step: Int, CaseIterable {
         case welcome, sex, birthYear, height, weight, activity, goal, result
@@ -206,7 +222,10 @@ struct OnboardingView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            if step != .welcome {
+            if isRedo && step == firstStep {
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(.bordered)
+            } else if step != firstStep {
                 Button("Back") {
                     if let previous = Step(rawValue: step.rawValue - 1) {
                         step = previous
@@ -217,7 +236,7 @@ struct OnboardingView: View {
             Button {
                 goForward()
             } label: {
-                Text(step == .result ? "Start using Calor" : "Continue")
+                Text(step == .result ? (isRedo ? "Save" : "Start using Calor") : "Continue")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -240,8 +259,11 @@ struct OnboardingView: View {
     private func finish() {
         dailyGoal = goalValue
         proteinTarget = profile.suggestedProteinG
-        // Saved last: this switches the app from onboarding to the main tabs.
+        // Saved last: on first launch this switches the app to the main tabs.
         profileData = profile.data
+        if isRedo {
+            dismiss()
+        }
     }
 }
 
