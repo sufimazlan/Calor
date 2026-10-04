@@ -300,17 +300,7 @@ private struct DayLog: View {
             SettingsView()
         }
         .sheet(isPresented: $isSettingUpBackup) {
-            NavigationStack {
-                Form {
-                    BackupSettingsSection()
-                }
-                .navigationTitle("Backup")
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { isSettingUpBackup = false }
-                    }
-                }
-            }
+            BackupSetupSheet()
         }
         .sheet(isPresented: $isEditingProfile) {
             NavigationStack {

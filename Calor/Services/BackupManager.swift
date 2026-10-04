@@ -42,6 +42,26 @@ struct CalorBackup: Codable {
     var entries: [Entry]
 }
 
+extension CalorBackup.Entry {
+    init(_ entry: FoodEntry, includePhoto: Bool) {
+        self.init(
+            id: entry.id,
+            timestamp: entry.timestamp,
+            mealType: entry.mealTypeRaw,
+            name: entry.name,
+            portion: entry.portion,
+            calories: entry.calories,
+            proteinG: entry.proteinG,
+            carbsG: entry.carbsG,
+            fatG: entry.fatG,
+            source: entry.sourceRaw,
+            confidence: entry.confidenceRaw,
+            notes: entry.notes,
+            thumbnail: includePhoto ? entry.thumbnail : nil
+        )
+    }
+}
+
 /// Automatic backups to a folder the user picks once in the Files app,
 /// e.g. "On My iPhone/Calor Backups". Files there stay on the phone even if
 /// Calor is deleted. Each phone backs up to its own storage.
@@ -53,11 +73,13 @@ enum BackupManager {
     enum BackupError: LocalizedError {
         case noFolder
         case folderUnavailable
+        case noFolderForSafetyCopy
 
         var errorDescription: String? {
             switch self {
             case .noFolder: "No backup folder chosen."
             case .folderUnavailable: "The backup folder can't be opened. It may have been moved or deleted. Choose it again."
+            case .noFolderForSafetyCopy: "Choose a backup folder first, so the meals on this phone can be saved before they're replaced."
             }
         }
     }
@@ -112,7 +134,7 @@ enum BackupManager {
 
     // MARK: - Backing up
 
-    /// When Calor last backed up on leaving (this launch only).
+    /// When Calor last wrote a backup on leaving (this launch only).
     private static var lastLeaveBackup: Date?
 
     /// Backs up when the app opens, if a folder is set and the last backup is
@@ -127,21 +149,25 @@ enum BackupManager {
         backUpRecordingErrors(context: context)
     }
 
-    /// Backs up when the app goes to the background, at most every 15 minutes.
-    /// Not held back by the backup made on opening, so a short session's meals are saved.
+    /// Backs up every time the app goes to the background (at most once a minute),
+    /// so even a short visit's meals are saved. Writing the file is quick.
     static func backUpOnLeave(context: ModelContext) {
         guard hasFolder else { return }
-        if let last = lastLeaveBackup, Date.now.timeIntervalSince(last) < 15 * 60 { return }
-        backUpRecordingErrors(context: context)
-        lastLeaveBackup = .now
+        if let last = lastLeaveBackup, Date.now.timeIntervalSince(last) < 60 { return }
+        if backUpRecordingErrors(context: context) {
+            lastLeaveBackup = .now
+        }
     }
 
     /// Automatic backups can't show an alert, so failures are saved for Today and Settings to show.
-    private static func backUpRecordingErrors(context: ModelContext) {
+    /// Returns true if a file was written.
+    @discardableResult
+    private static func backUpRecordingErrors(context: ModelContext) -> Bool {
         do {
-            try backUpNow(context: context)
+            return try backUpNow(context: context)
         } catch {
             UserDefaults.standard.set(error.localizedDescription, forKey: SettingsKey.backupLastError)
+            return false
         }
     }
 
@@ -163,13 +189,18 @@ enum BackupManager {
         guard !backup.entries.isEmpty else { return false }
 
         let target = folder.appendingPathComponent(fileName(for: .now))
-        if lastBackupDate == nil, FileManager.default.fileExists(atPath: target.path) {
-            // This install has never backed up, so today's file came from before a
-            // reinstall. Keep it under another name (keep-last-7 leaves it alone).
+        if lastBackupDate == nil, let previous = dailyBackups(in: folder).first {
+            // This install has never backed up, so the newest file came from before a
+            // reinstall. Keep a copy under a name keep-last-7 never deletes, so the
+            // new install's daily backups can't push it out.
             let kept = folder.appendingPathComponent(
-                target.deletingPathExtension().lastPathComponent + " (earlier install).json")
-            try? FileManager.default.removeItem(at: kept)
-            try FileManager.default.moveItem(at: target, to: kept)
+                previous.deletingPathExtension().lastPathComponent
+                    + " (earlier install \(Int(Date.now.timeIntervalSince1970))).json")
+            if previous.lastPathComponent == target.lastPathComponent {
+                try FileManager.default.moveItem(at: previous, to: kept)
+            } else {
+                try FileManager.default.copyItem(at: previous, to: kept)
+            }
         }
         try encoder.encode(backup).write(to: target, options: .atomic)
         deleteOldBackups(in: folder)
@@ -211,9 +242,9 @@ enum BackupManager {
         }
     }
 
-    private static func makeBackup(context: ModelContext) throws -> CalorBackup {
+    private static func makeBackup(context: ModelContext, includePhotos forcePhotos: Bool? = nil) throws -> CalorBackup {
         let defaults = UserDefaults.standard
-        let includePhotos = defaults.object(forKey: SettingsKey.backupIncludesPhotos) as? Bool ?? true
+        let includePhotos = forcePhotos ?? (defaults.object(forKey: SettingsKey.backupIncludesPhotos) as? Bool ?? true)
         let entries = try context.fetch(FetchDescriptor<FoodEntry>(sortBy: [SortDescriptor(\.timestamp)]))
 
         func integer(_ key: String, default value: Int) -> Int {
@@ -235,27 +266,23 @@ enum BackupManager {
             breakfastReminderMinutes: MealReminders.minutes(for: MealReminders.all[0]),
             lunchReminderMinutes: MealReminders.minutes(for: MealReminders.all[1]),
             dinnerReminderMinutes: MealReminders.minutes(for: MealReminders.all[2]),
-            entries: entries.map { entry in
-                CalorBackup.Entry(
-                    id: entry.id,
-                    timestamp: entry.timestamp,
-                    mealType: entry.mealTypeRaw,
-                    name: entry.name,
-                    portion: entry.portion,
-                    calories: entry.calories,
-                    proteinG: entry.proteinG,
-                    carbsG: entry.carbsG,
-                    fatG: entry.fatG,
-                    source: entry.sourceRaw,
-                    confidence: entry.confidenceRaw,
-                    notes: entry.notes,
-                    thumbnail: includePhotos ? entry.thumbnail : nil
-                )
-            }
+            entries: entries.map { CalorBackup.Entry($0, includePhoto: includePhotos) }
         )
     }
 
     // MARK: - Restoring
+
+    /// The backup plus any meals on this phone it doesn't already contain, e.g.
+    /// meals logged after a reinstall, so restoring it doesn't lose them.
+    static func merging(_ backup: CalorBackup, withMealsIn context: ModelContext) -> CalorBackup {
+        var merged = backup
+        let known = Set(backup.entries.map(\.id))
+        let onPhone = (try? context.fetch(FetchDescriptor<FoodEntry>())) ?? []
+        merged.entries += onPhone
+            .filter { !known.contains($0.id) }
+            .map { CalorBackup.Entry($0, includePhoto: true) }
+        return merged
+    }
 
     /// Reads a backup file picked with the file importer.
     static func readBackup(from url: URL) throws -> CalorBackup {
@@ -266,11 +293,12 @@ enum BackupManager {
         return try decoder.decode(CalorBackup.self, from: Data(contentsOf: url))
     }
 
-    /// Copy of what was on the phone before the last restore. Never deleted automatically.
-    static let beforeRestoreFileName = "Calor before restore.json"
+    /// Start of the name of the copy saved before each restore. These are never deleted automatically.
+    static let beforeRestorePrefix = "Calor before restore"
 
     /// Replaces every meal and setting on this phone with the backup.
-    /// What was there before is first saved as "Calor before restore.json".
+    /// If the phone has meals, they're first saved to the backup folder as
+    /// "Calor before restore <time>.json"; if that can't be done, nothing is changed.
     static func restore(_ backup: CalorBackup, context: ModelContext) throws {
         try saveCopyBeforeRestore(context: context)
 
@@ -319,18 +347,18 @@ enum BackupManager {
         defaults.set(backup.breakfastReminderMinutes, forKey: SettingsKey.breakfastReminderMinutes)
         defaults.set(backup.lunchReminderMinutes, forKey: SettingsKey.lunchReminderMinutes)
         defaults.set(backup.dinnerReminderMinutes, forKey: SettingsKey.dinnerReminderMinutes)
-        // Treat the restored data as this install's latest backup, so the next
-        // automatic backup writes today's file normally.
-        defaults.set(Date.now.timeIntervalSince1970, forKey: SettingsKey.backupLastDate)
     }
 
     private static func saveCopyBeforeRestore(context: ModelContext) throws {
-        guard let folder = folderURL() else { return }
-        guard folder.startAccessingSecurityScopedResource() else { return }
+        let current = try makeBackup(context: context, includePhotos: true)
+        guard !current.entries.isEmpty else { return } // Nothing to lose, e.g. during setup.
+        guard let folder = folderURL() else {
+            throw hasFolder ? BackupError.folderUnavailable : BackupError.noFolderForSafetyCopy
+        }
+        guard folder.startAccessingSecurityScopedResource() else { throw BackupError.folderUnavailable }
         defer { folder.stopAccessingSecurityScopedResource() }
-        let current = try makeBackup(context: context)
-        guard !current.entries.isEmpty else { return }
-        try encoder.encode(current).write(to: folder.appendingPathComponent(beforeRestoreFileName), options: .atomic)
+        let name = "\(beforeRestorePrefix) \(Int(Date.now.timeIntervalSince1970)).json"
+        try encoder.encode(current).write(to: folder.appendingPathComponent(name), options: .atomic)
     }
 
     // MARK: - Coding

@@ -724,8 +724,9 @@ struct OnboardingView: View {
     private func restore(_ backup: CalorBackup) {
         do {
             try BackupManager.restore(backup, context: modelContext)
-            Task { await MealReminders.reschedule() }
+            Task { await MealReminders.applyRestoredSettings() }
             if backup.profile == nil {
+                name = backup.userName
                 restoreMessage = "Restored \(backup.entries.count) meals. Now answer a few questions to set your goal."
             }
         } catch {

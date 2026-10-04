@@ -198,12 +198,14 @@ Until a Claude API key is added, photo analysis returns realistic sample results
 
 ### 6.6b Automatic backup — P0
 
-- One-time setup in Settings → **Automatic backup → Choose backup folder**: the user picks or creates a folder in the Files app, recommended **On My iPhone/Calor Backups**. Calor remembers it with a bookmark.
-- A backup is written when the app opens (if none today) and when it goes to the background (if the last one is over 15 minutes old). One JSON file per day, named `Calor backup YYYY-MM-DD.json` in local time, replaced through the day. The newest **7** are kept.
+- One-time setup in Settings, or from the Today card **Protect your meals**: **Choose backup folder** in the Files app, recommended **On My iPhone/Calor Backups**. Calor remembers it with a bookmark.
+- Backups are written when the app opens (if none today) and **every time it goes to the background** (at most once a minute), so even a short visit's meals are saved. One JSON file per day, `Calor backup YYYY-MM-DD.json` in local time. The newest **7** daily files are kept. Only exactly-named daily files are ever deleted.
 - Contents: every meal (optionally with photo thumbnails), profile, name and photo, targets, rollover and reminder settings.
-- **Restore from a backup…** replaces all meals and settings on the phone after a confirmation.
-- Each phone backs up to its own storage. Files in On My iPhone survive deleting the app, but not losing the phone. iCloud Drive or Google Drive can be picked instead for off-phone copies.
-- Today shows a dismissible "Protect your meals" card until a folder is chosen (once meals exist).
+- **Never writes an empty backup.** Right after a reinstall the phone has no meals, so existing backups are left alone. On a new install's first backup, the previous install's newest file is kept permanently as `… (earlier install <time>).json`.
+- **Picking a folder that already has a bigger backup** (after a reinstall) offers to restore it, **merged with meals logged on the phone since**.
+- **Restore from a backup…** (Settings, or the setup welcome screen) replaces meals and settings after a confirmation that explains exactly what happens. If the phone has meals, they are first saved as `Calor before restore <time>.json` with photos. If that copy can't be saved, the restore stops and nothing changes. Restored meal reminders ask for notification permission.
+- If automatic backups start failing (e.g. the folder was deleted), Today shows **Backup isn't working** with **Fix backup**.
+- Each phone backs up to its own storage. Files in On My iPhone survive deleting the app, but not losing the phone.
 
 ### 6.6c Reinstall reminders (free Apple ID) — P0
 

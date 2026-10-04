@@ -5,27 +5,176 @@
 
 import SwiftUI
 import SwiftData
+import Observation
 import UniformTypeIdentifiers
 import UserNotifications
+
+/// Picking the backup folder and restoring a backup. Shared by the backup section
+/// (which starts things) and `.backupFlowPresenter` on the screen's Form (which
+/// shows the file picker and dialogs). On a row inside a Form they might not appear,
+/// because rows that are scrolled off screen aren't loaded.
+@Observable
+final class BackupFlow {
+    enum ImportMode {
+        case folder, restore
+    }
+
+    var isImporting = false
+    var importMode = ImportMode.folder
+    var pendingRestore: CalorBackup?
+    /// Meals already on this phone that were added to `pendingRestore` (after a reinstall).
+    var mergedMealCount = 0
+    var message: String?
+
+    func pickFolder() {
+        importMode = .folder
+        isImporting = true
+    }
+
+    func pickRestoreFile() {
+        importMode = .restore
+        isImporting = true
+    }
+
+    func cancelRestore() {
+        pendingRestore = nil
+        mergedMealCount = 0
+    }
+
+    func handleImport(_ result: Result<URL, Error>, context: ModelContext) {
+        message = nil
+        switch result {
+        case .failure(let error):
+            message = error.localizedDescription
+        case .success(let url):
+            switch importMode {
+            case .folder:
+                useFolder(url, context: context)
+            case .restore:
+                do {
+                    mergedMealCount = 0
+                    pendingRestore = try BackupManager.readBackup(from: url)
+                } catch {
+                    message = "That file isn't a Calor backup."
+                }
+            }
+        }
+    }
+
+    private func useFolder(_ url: URL, context: ModelContext) {
+        let isFirstBackupOnThisInstall = BackupManager.lastBackupDate == nil
+        do {
+            try BackupManager.setFolder(url)
+        } catch {
+            setError("Couldn't use that folder: \(error.localizedDescription)")
+            return
+        }
+        // After a reinstall the folder may already hold a backup with more meals than
+        // this phone has: offer to restore it, keeping meals logged since the reinstall.
+        if isFirstBackupOnThisInstall, let newest = BackupManager.newestBackup() {
+            let mealsHere = (try? context.fetchCount(FetchDescriptor<FoodEntry>())) ?? 0
+            if newest.entries.count > mealsHere {
+                let merged = BackupManager.merging(newest, withMealsIn: context)
+                mergedMealCount = merged.entries.count - newest.entries.count
+                pendingRestore = merged
+                return
+            }
+        }
+        backUpNow(context: context)
+    }
+
+    func backUpNow(context: ModelContext) {
+        do {
+            let didWrite = try BackupManager.backUpNow(context: context)
+            message = didWrite
+                ? "Backed up just now."
+                : "Nothing to back up yet. Log a meal first. Existing backups were left alone."
+        } catch {
+            message = nil
+            setError(error.localizedDescription)
+        }
+    }
+
+    func restore(_ backup: CalorBackup, context: ModelContext) {
+        do {
+            try BackupManager.restore(backup, context: context)
+            message = "Restored \(backup.entries.count) meals."
+            Task { await MealReminders.applyRestoredSettings() }
+        } catch {
+            message = "Restore didn't happen, nothing was changed. \(error.localizedDescription)"
+        }
+        cancelRestore()
+    }
+
+    /// Explains exactly what a restore will do, including whether today's meals are kept.
+    func restoreMessage(for backup: CalorBackup) -> String {
+        let date = backup.createdAt.formatted(date: .abbreviated, time: .shortened)
+        let safety: String
+        if BackupManager.folderURL(refreshIfStale: false) != nil {
+            safety = "What's on this phone now is saved first as a \"\(BackupManager.beforeRestorePrefix)\" file in your backup folder."
+        } else if BackupManager.hasFolder {
+            safety = "Your backup folder can't be opened right now, so if this phone has meals the restore will stop to keep them safe."
+        } else {
+            safety = "If this phone has meals, choose a backup folder first so they can be saved before they're replaced."
+        }
+        if mergedMealCount > 0 {
+            let backupMeals = backup.entries.count - mergedMealCount
+            return "This folder has a backup from \(date) with \(backupMeals) meals. Restoring it keeps the \(mergedMealCount) meals logged on this phone since, and brings back your profile and settings. \(safety)"
+        }
+        return "Backup from \(date) with \(backup.entries.count) meals. All meals and settings on this phone will be replaced. \(safety)"
+    }
+
+    private func setError(_ text: String) {
+        UserDefaults.standard.set(text, forKey: SettingsKey.backupLastError)
+    }
+}
+
+/// Shows the file picker and restore dialog for a `BackupFlow`. Attach to the Form.
+struct BackupFlowPresenter: ViewModifier {
+    @Bindable var flow: BackupFlow
+    @Environment(\.modelContext) private var modelContext
+
+    func body(content: Content) -> some View {
+        content
+            .fileImporter(isPresented: $flow.isImporting,
+                          allowedContentTypes: flow.importMode == .folder ? [.folder] : [.json]) { result in
+                flow.handleImport(result, context: modelContext)
+            }
+            .confirmationDialog(flow.mergedMealCount > 0 ? "Restore your backup?" : "Restore this backup?",
+                                isPresented: restoreDialogBinding,
+                                titleVisibility: .visible,
+                                presenting: flow.pendingRestore) { backup in
+                Button(flow.mergedMealCount > 0 ? "Restore and keep today's meals" : "Replace everything on this phone",
+                       role: flow.mergedMealCount > 0 ? nil : .destructive) {
+                    flow.restore(backup, context: modelContext)
+                }
+            } message: { backup in
+                Text(flow.restoreMessage(for: backup))
+            }
+    }
+
+    private var restoreDialogBinding: Binding<Bool> {
+        Binding(get: { flow.pendingRestore != nil },
+                set: { if !$0 { flow.cancelRestore() } })
+    }
+}
+
+extension View {
+    func backupFlowPresenter(_ flow: BackupFlow) -> some View {
+        modifier(BackupFlowPresenter(flow: flow))
+    }
+}
 
 /// Settings section for automatic backup: pick a folder once, see the last
 /// backup, back up now, and restore.
 struct BackupSettingsSection: View {
-    @Environment(\.modelContext) private var modelContext
+    let flow: BackupFlow
 
+    @Environment(\.modelContext) private var modelContext
     @AppStorage(SettingsKey.backupFolderBookmark) private var folderBookmark: Data?
     @AppStorage(SettingsKey.backupLastDate) private var lastBackupSeconds = 0.0
     @AppStorage(SettingsKey.backupLastError) private var lastError = ""
     @AppStorage(SettingsKey.backupIncludesPhotos) private var includesPhotos = true
-
-    private enum ImportMode {
-        case folder, restore
-    }
-
-    @State private var isImporting = false
-    @State private var importMode = ImportMode.folder
-    @State private var pendingRestore: CalorBackup?
-    @State private var message: String?
 
     var body: some View {
         // Resolved once per render, without writing settings while drawing.
@@ -45,33 +194,18 @@ struct BackupSettingsSection: View {
                 }
                 Toggle("Include meal photos", isOn: $includesPhotos)
                 Button("Back up now", systemImage: "arrow.clockwise") {
-                    backUpNow()
+                    flow.backUpNow(context: modelContext)
                 }
                 Button("Change folder", systemImage: "folder") {
-                    pickFolder()
+                    flow.pickFolder()
                 }
             } else {
                 Button("Choose backup folder", systemImage: "folder.badge.plus") {
-                    pickFolder()
+                    flow.pickFolder()
                 }
             }
-            // The importer and dialog sit on one row that's always shown: on a whole
-            // Section inside a Form they would be repeated for every row.
             Button("Restore from a backup…", systemImage: "clock.arrow.circlepath") {
-                importMode = .restore
-                isImporting = true
-            }
-            .fileImporter(isPresented: $isImporting,
-                          allowedContentTypes: importMode == .folder ? [.folder] : [.json]) { result in
-                handleImport(result)
-            }
-            .confirmationDialog("Restore this backup?", isPresented: restoreDialogBinding,
-                                titleVisibility: .visible, presenting: pendingRestore) { backup in
-                Button("Replace everything on this phone", role: .destructive) {
-                    restore(backup)
-                }
-            } message: { backup in
-                Text("Backup from \(backup.createdAt.formatted(date: .abbreviated, time: .shortened)) with \(backup.entries.count) meals. All meals and settings on this phone will be replaced. What's here now is saved first as \"\(BackupManager.beforeRestoreFileName)\".")
+                flow.pickRestoreFile()
             }
         } header: {
             Text("Automatic backup")
@@ -81,7 +215,7 @@ struct BackupSettingsSection: View {
                     Text(lastError)
                         .foregroundStyle(.red)
                 }
-                if let message {
+                if let message = flow.message {
                     Text(message)
                 }
                 Text(folderName == nil
@@ -90,75 +224,26 @@ struct BackupSettingsSection: View {
             }
         }
     }
+}
 
-    private var restoreDialogBinding: Binding<Bool> {
-        Binding(get: { pendingRestore != nil },
-                set: { if !$0 { pendingRestore = nil } })
-    }
+/// The backup section on its own, opened from the Today screen.
+struct BackupSetupSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var flow = BackupFlow()
 
-    private func pickFolder() {
-        importMode = .folder
-        isImporting = true
-    }
-
-    private func handleImport(_ result: Result<URL, Error>) {
-        message = nil
-        switch result {
-        case .failure(let error):
-            message = error.localizedDescription
-        case .success(let url):
-            switch importMode {
-            case .folder:
-                useFolder(url)
-            case .restore:
-                do {
-                    pendingRestore = try BackupManager.readBackup(from: url)
-                } catch {
-                    message = "That file isn't a Calor backup."
+    var body: some View {
+        NavigationStack {
+            Form {
+                BackupSettingsSection(flow: flow)
+            }
+            .backupFlowPresenter(flow)
+            .navigationTitle("Backup")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
                 }
             }
-        }
-    }
-
-    private func useFolder(_ url: URL) {
-        let isFirstBackupOnThisInstall = BackupManager.lastBackupDate == nil
-        do {
-            try BackupManager.setFolder(url)
-        } catch {
-            lastError = "Couldn't use that folder: \(error.localizedDescription)"
-            return
-        }
-        // After a reinstall the folder may already hold backups with more meals than
-        // this phone has: offer to restore them instead of backing up straight away.
-        if isFirstBackupOnThisInstall, let newest = BackupManager.newestBackup() {
-            let mealsHere = (try? modelContext.fetchCount(FetchDescriptor<FoodEntry>())) ?? 0
-            if newest.entries.count > mealsHere {
-                pendingRestore = newest
-                return
-            }
-        }
-        backUpNow()
-    }
-
-    private func backUpNow() {
-        do {
-            let didWrite = try BackupManager.backUpNow(context: modelContext)
-            message = didWrite
-                ? "Backed up just now."
-                : "Nothing to back up yet. Log a meal first. Existing backups were left alone."
-        } catch {
-            message = nil
-            lastError = error.localizedDescription
-        }
-    }
-
-    private func restore(_ backup: CalorBackup) {
-        do {
-            try BackupManager.restore(backup, context: modelContext)
-            message = "Restored \(backup.entries.count) meals."
-            Task { await MealReminders.reschedule() }
-        } catch {
-            message = "Restore failed, nothing was changed: \(error.localizedDescription)"
         }
     }
 }
@@ -166,6 +251,7 @@ struct BackupSettingsSection: View {
 /// Settings section showing when this install stops opening (free Apple ID: 7 days),
 /// with the reinstall reminders switch.
 struct InstallSettingsSection: View {
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(SettingsKey.reinstallRemindersEnabled) private var reinstallRemindersEnabled = true
     @State private var notificationsDenied = false
 
@@ -178,11 +264,14 @@ struct InstallSettingsSection: View {
                 }
                 Toggle("Remind me to reinstall", isOn: $reinstallRemindersEnabled)
                     .onChange(of: reinstallRemindersEnabled) {
-                        Task { await ReinstallReminders.reschedule() }
+                        Task {
+                            await ReinstallReminders.reschedule()
+                            await refreshNotificationStatus()
+                        }
                     }
-                    .task(id: reinstallRemindersEnabled) {
-                        notificationsDenied = await UNUserNotificationCenter.current()
-                            .notificationSettings().authorizationStatus == .denied
+                    // Re-checked when coming back from the iPhone Settings app.
+                    .task(id: scenePhase) {
+                        await refreshNotificationStatus()
                     }
             } else {
                 LabeledContent("This install expires", value: "Never (simulator)")
@@ -199,12 +288,19 @@ struct InstallSettingsSection: View {
             }
         }
     }
+
+    private func refreshNotificationStatus() async {
+        notificationsDenied = await UNUserNotificationCenter.current()
+            .notificationSettings().authorizationStatus == .denied
+    }
 }
 
 #Preview {
+    @Previewable @State var flow = BackupFlow()
     Form {
-        BackupSettingsSection()
+        BackupSettingsSection(flow: flow)
         InstallSettingsSection()
     }
+    .backupFlowPresenter(flow)
     .modelContainer(for: FoodEntry.self, inMemory: true)
 }

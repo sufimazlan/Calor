@@ -32,6 +32,16 @@ enum MealReminders {
         UserDefaults.standard.object(forKey: reminder.key) as? Int ?? reminder.defaultMinutes
     }
 
+    /// After restoring a backup: if the restored settings turn reminders on, ask for
+    /// permission (a fresh install hasn't been asked yet), then schedule them.
+    static func applyRestoredSettings() async {
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: SettingsKey.remindersEnabled), !(await requestPermission()) {
+            defaults.set(false, forKey: SettingsKey.remindersEnabled)
+        }
+        await reschedule()
+    }
+
     /// Replaces any scheduled reminders with the current settings.
     static func reschedule() async {
         let center = UNUserNotificationCenter.current()

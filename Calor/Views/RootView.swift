@@ -25,13 +25,17 @@ struct RootView: View {
         }
         .task {
             await ReinstallReminders.reschedule()
+            await MealReminders.reschedule()
             BackupManager.backUpIfNeeded(context: modelContext, minimumAge: 20 * 60 * 60)
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
                 // A reinstall from Xcode may bring a new expiry date.
-                Task { await ReinstallReminders.reschedule() }
+                Task {
+                    await ReinstallReminders.reschedule()
+                    await MealReminders.reschedule()
+                }
                 BackupManager.backUpIfNeeded(context: modelContext, minimumAge: 20 * 60 * 60)
             case .background:
                 // Capture meals logged since the last backup.

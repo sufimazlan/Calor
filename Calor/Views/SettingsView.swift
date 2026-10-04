@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.lunchReminderMinutes) private var lunchMinutes = MealReminders.all[1].defaultMinutes
     @AppStorage(SettingsKey.dinnerReminderMinutes) private var dinnerMinutes = MealReminders.all[2].defaultMinutes
     @State private var remindersBlocked = false
+    @State private var backupFlow = BackupFlow()
     @AppStorage(SettingsKey.profile) private var profileData: Data?
     @AppStorage(SettingsKey.userName) private var userName = ""
     @AppStorage(SettingsKey.avatarJPEG) private var avatarData: Data?
@@ -110,7 +111,7 @@ struct SettingsView: View {
                     }
                 }
 
-                BackupSettingsSection()
+                BackupSettingsSection(flow: backupFlow)
                 InstallSettingsSection()
 
                 Section {
@@ -122,6 +123,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .backupFlowPresenter(backupFlow)
             .onChange(of: remindersEnabled) { _, isOn in
                 Task {
                     if isOn {
