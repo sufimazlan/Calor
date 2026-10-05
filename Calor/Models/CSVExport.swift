@@ -85,7 +85,7 @@ enum CSVExport {
     /// Starts with a byte order mark so Excel reads accents and emoji correctly.
     static func document(header: [String], rows: [[String]]) -> String {
         "\u{FEFF}" + ([header] + rows)
-            .map { $0.map(escape).joined(separator: ",") }
+            .map { row in row.map { escape($0) }.joined(separator: ",") }
             .joined(separator: "\r\n") + "\r\n"
     }
 
