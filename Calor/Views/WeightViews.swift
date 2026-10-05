@@ -30,8 +30,9 @@ struct WeightLogSheet: View {
 
     private var range: ClosedRange<Double> {
         guard usesPounds else { return Profile.weightRange }
-        return (Profile.weightRange.lowerBound * Self.poundsPerKg).rounded(.up)
-            ...(Profile.weightRange.upperBound * Self.poundsPerKg).rounded(.down)
+        let lower = (Profile.weightRange.lowerBound * Self.poundsPerKg).rounded(.up)
+        let upper = (Profile.weightRange.upperBound * Self.poundsPerKg).rounded(.down)
+        return lower...upper
     }
 
     var body: some View {
