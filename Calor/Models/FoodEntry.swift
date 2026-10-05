@@ -6,32 +6,6 @@
 import Foundation
 import SwiftData
 
-enum MealType: String, CaseIterable, Identifiable {
-    case breakfast, lunch, dinner, snack
-
-    var id: String { rawValue }
-    var title: String { rawValue.capitalized }
-
-    /// The meal people usually eat at this time of day, used as the default for new entries.
-    static func suggested(for date: Date = .now) -> MealType {
-        switch Calendar.current.component(.hour, from: date) {
-        case 4..<11: .breakfast
-        case 11..<15: .lunch
-        case 15..<18: .snack
-        case 18..<22: .dinner
-        default: .snack
-        }
-    }
-}
-
-enum EntrySource: String {
-    case manual, photo
-}
-
-enum Confidence: String, Codable {
-    case low, medium, high
-}
-
 @Model
 final class FoodEntry {
     var id: UUID
@@ -46,6 +20,10 @@ final class FoodEntry {
     var notes: String?
     /// Small JPEG of the meal photo (photo entries only).
     @Attribute(.externalStorage) var thumbnail: Data?
+    /// Starred, so it shows in Favourites on the Add screen.
+    var isFavorite: Bool = false
+    /// 1–10 from the photo analysis (see `HealthScore`). Nil for entries typed in by hand.
+    var healthScore: Int?
 
     // Enums are stored as plain strings so the database stays simple.
     // Use `mealType`, `source` and `confidence` below instead of these.
@@ -80,7 +58,8 @@ final class FoodEntry {
         source: EntrySource = .manual,
         confidence: Confidence? = nil,
         thumbnail: Data? = nil,
-        notes: String? = nil
+        notes: String? = nil,
+        healthScore: Int? = nil
     ) {
         self.id = UUID()
         self.timestamp = timestamp
@@ -92,8 +71,34 @@ final class FoodEntry {
         self.fatG = fatG
         self.notes = notes
         self.thumbnail = thumbnail
+        self.healthScore = healthScore
         self.mealTypeRaw = mealType.rawValue
         self.sourceRaw = source.rawValue
         self.confidenceRaw = confidence?.rawValue
+    }
+
+    /// The same food logged again ("Log again", "Copy to today"). The copy is a new
+    /// entry with its own id; it isn't a favourite itself.
+    func duplicate(at date: Date = .now, mealType: MealType? = nil) -> FoodEntry {
+        FoodEntry(
+            timestamp: date,
+            mealType: mealType ?? self.mealType,
+            name: name,
+            portion: portion,
+            calories: calories,
+            proteinG: proteinG,
+            carbsG: carbsG,
+            fatG: fatG,
+            source: source,
+            confidence: confidence,
+            thumbnail: thumbnail,
+            notes: notes,
+            healthScore: healthScore
+        )
+    }
+
+    /// Name used to group the same food, e.g. in Recent and Favourites.
+    var matchKey: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }

@@ -39,7 +39,11 @@ enum MealReminders {
         if defaults.bool(forKey: SettingsKey.remindersEnabled), !(await requestPermission()) {
             defaults.set(false, forKey: SettingsKey.remindersEnabled)
         }
+        if defaults.bool(forKey: SettingsKey.weighInReminderEnabled), !(await requestPermission()) {
+            defaults.set(false, forKey: SettingsKey.weighInReminderEnabled)
+        }
         await reschedule()
+        await WeighInReminder.reschedule()
     }
 
     /// Replaces any scheduled reminders with the current settings.
@@ -61,5 +65,27 @@ enum MealReminders {
             let trigger = UNCalendarNotificationTrigger(dateMatching: time, repeats: true)
             try? await center.add(UNNotificationRequest(identifier: reminder.identifier, content: content, trigger: trigger))
         }
+    }
+}
+
+/// Monday-morning reminder to step on the scale and log the weight.
+enum WeighInReminder {
+    static let identifier = "weigh-in-reminder"
+
+    static func reschedule() async {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+        guard UserDefaults.standard.bool(forKey: SettingsKey.weighInReminderEnabled) else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Weekly weigh-in"
+        content.body = "Step on the scale before breakfast and log it in Calor to keep your plan on track."
+        content.sound = .default
+        var time = DateComponents()
+        time.weekday = 2 // Monday
+        time.hour = 7
+        time.minute = 30
+        let trigger = UNCalendarNotificationTrigger(dateMatching: time, repeats: true)
+        try? await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
     }
 }

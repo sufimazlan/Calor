@@ -16,6 +16,7 @@ struct TrendsView: View {
     @AppStorage(SettingsKey.fatTargetG) private var fatTarget = 0
     @AppStorage(SettingsKey.profile) private var profileData: Data?
     @Query private var entries: [FoodEntry]
+    @Query(sort: \WeightEntry.date) private var weights: [WeightEntry]
     /// Switches to the Today tab when the Calor logo is tapped.
     let goHome: () -> Void
 
@@ -77,6 +78,8 @@ struct TrendsView: View {
                     summaryGrid(stats)
                 }
 
+                weightLinkSection
+
                 if stats.loggedDays.isEmpty {
                     Section {
                         Text("Log a few meals to see your analytics here.")
@@ -105,6 +108,13 @@ struct TrendsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     CalorLogoButton(action: goHome)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        BadgesView()
+                    } label: {
+                        Label("Badges", systemImage: "rosette")
+                    }
                 }
             }
             .onChange(of: range) {
@@ -180,6 +190,33 @@ struct TrendsView: View {
     }
 
     // MARK: - Sections
+
+    /// Latest weigh-in and the change over the chosen range, linking to the weight chart.
+    private var weightLinkSection: some View {
+        Section {
+            NavigationLink {
+                WeightHistoryView()
+            } label: {
+                if let latest = weights.last {
+                    let profile = Profile(data: profileData) ?? Profile()
+                    let rangeStart = calendar.date(byAdding: .day, value: -(range.rawValue - 1),
+                                                   to: calendar.startOfDay(for: .now)) ?? .now
+                    let first = weights.first(where: { $0.date >= rangeStart })
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Weight \(profile.weightText(latest.kg))")
+                        if let first, first.id != latest.id {
+                            let change = latest.kg - first.kg
+                            Text("\(change > 0 ? "+" : change < 0 ? "−" : "±")\(profile.weightText(abs(change))) in the last \(range.title)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    Text("Weight: log your first weigh-in")
+                }
+            }
+        }
+    }
 
     private func summaryGrid(_ stats: TrendStats) -> some View {
         Grid(horizontalSpacing: 8, verticalSpacing: 16) {
@@ -501,6 +538,11 @@ private struct TrendStats {
             result.append("Protein averages \(Int(macros.protein.rounded())) g a day, \(share) of your \(proteinTarget) g target.")
         }
 
+        if let score = averageHealthScore {
+            let advice = score >= 7 ? "Nice balance." : "More vegetables, fruit and lean protein will lift it."
+            result.append("Your meals average \(score)/10 for health. \(advice)")
+        }
+
         if let top = topFoods.first, top.count >= 2 {
             result.append("\(top.name) adds the most calories: \(top.totalCalories.formatted()) kcal over \(top.count) times.")
         }
@@ -512,6 +554,11 @@ private struct TrendStats {
         return result
     }
 
+    /// Calorie-weighted health score of the analysed meals in range.
+    var averageHealthScore: Int? {
+        HealthScore.meal(rangeEntries.map { (calories: $0.calories, score: $0.healthScore) })
+    }
+
     private func average(_ values: [Int]) -> Int? {
         values.isEmpty ? nil : values.reduce(0, +) / values.count
     }
@@ -519,7 +566,7 @@ private struct TrendStats {
 
 #Preview {
     let container = try! ModelContainer(
-        for: FoodEntry.self,
+        for: FoodEntry.self, WeightEntry.self, WaterLog.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
     let calendar = Calendar.current

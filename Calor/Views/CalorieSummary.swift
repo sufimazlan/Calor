@@ -14,6 +14,8 @@ struct CalorieSummary: View {
     var proteinTargetG: Int?
     /// Calories carried over from yesterday and already included in `goal`.
     var rollover = 0
+    /// Workout calories from Apple Health, already included in `goal`.
+    var workoutBonus = 0
 
     private var remaining: Int { goal - eaten }
     private var isOver: Bool { remaining < 0 }
@@ -42,6 +44,11 @@ struct CalorieSummary: View {
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.blue)
                             .padding(.top, 2)
+                    }
+                    if workoutBonus > 0 {
+                        Label("+\(workoutBonus) workouts", systemImage: "figure.run")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.green)
                     }
                 }
             }

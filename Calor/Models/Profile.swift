@@ -209,6 +209,10 @@ struct Profile: Equatable {
     /// Display units only; everything is stored in cm and kg.
     var usesFeetAndInches = false
     var usesPounds = false
+    /// When the current goal was set, and the weight then. The goal card and the
+    /// weight chart measure progress from here. Nil for profiles saved before v0.7.
+    var planStartDate: Date?
+    var startWeightKg: Double?
 
     static let heightRange = 120...220
     static let weightRange = 30.0...250.0
@@ -292,6 +296,19 @@ struct Profile: Equatable {
         return Calendar.current.date(byAdding: .day, value: Int((kgToGoal / pace * 7).rounded()), to: .now)
     }
 
+    /// Starts measuring progress toward the goal from today's weight.
+    mutating func startPlan(at date: Date = .now) {
+        planStartDate = date
+        startWeightKg = weightKg
+    }
+
+    /// True if the goal, target weight or pace differ, so progress should be measured afresh.
+    func hasDifferentPlan(from other: Profile) -> Bool {
+        goal != other.goal
+            || abs(targetWeightKg - other.targetWeightKg) > 0.001
+            || abs(paceKgPerWeek - other.paceKgPerWeek) > 0.001
+    }
+
     /// Keeps pace and target weight consistent with the goal and current weight.
     mutating func normalize() {
         let range = goal.paceRange
@@ -343,6 +360,7 @@ extension Profile: Codable {
     private enum CodingKeys: String, CodingKey {
         case sex, birthDate, heightCm, weightKg, targetWeightKg, activity, goal, paceKgPerWeek
         case diet, obstacle, aspiration, usesFeetAndInches, usesPounds
+        case planStartDate, startWeightKg
         /// Older profiles stored only the birth year.
         case birthYear
     }
@@ -367,6 +385,8 @@ extension Profile: Codable {
         aspiration = try? container.decodeIfPresent(Aspiration.self, forKey: .aspiration)
         if let value = try? container.decodeIfPresent(Bool.self, forKey: .usesFeetAndInches) { usesFeetAndInches = value }
         if let value = try? container.decodeIfPresent(Bool.self, forKey: .usesPounds) { usesPounds = value }
+        planStartDate = try? container.decodeIfPresent(Date.self, forKey: .planStartDate)
+        startWeightKg = try? container.decodeIfPresent(Double.self, forKey: .startWeightKg)
 
         if let value = try? container.decodeIfPresent(Double.self, forKey: .targetWeightKg) {
             targetWeightKg = value
@@ -391,5 +411,7 @@ extension Profile: Codable {
         try container.encodeIfPresent(aspiration, forKey: .aspiration)
         try container.encode(usesFeetAndInches, forKey: .usesFeetAndInches)
         try container.encode(usesPounds, forKey: .usesPounds)
+        try container.encodeIfPresent(planStartDate, forKey: .planStartDate)
+        try container.encodeIfPresent(startWeightKg, forKey: .startWeightKg)
     }
 }

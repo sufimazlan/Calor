@@ -13,6 +13,8 @@ struct EntryFormView: View {
 
     /// The entry being edited, or nil when adding a new one.
     private let entry: FoodEntry?
+    /// Called after saving, e.g. to close the screen that opened this one too.
+    private let onSaved: () -> Void
 
     // Numbers are edited as text and parsed on save, so the Save button
     // updates as the user types.
@@ -26,8 +28,9 @@ struct EntryFormView: View {
     @State private var fatText: String
     @State private var notes: String
 
-    init(entry: FoodEntry? = nil) {
+    init(entry: FoodEntry? = nil, onSaved: @escaping () -> Void = {}) {
         self.entry = entry
+        self.onSaved = onSaved
         let now = Date.now
         _name = State(initialValue: entry?.name ?? "")
         _caloriesText = State(initialValue: entry.map { String($0.calories) } ?? "")
@@ -131,6 +134,7 @@ struct EntryFormView: View {
         target.fatG = Self.grams(from: fatText)
         target.notes = Self.nilIfBlank(notes)
 
+        onSaved()
         dismiss()
     }
 
@@ -155,5 +159,5 @@ struct EntryFormView: View {
 
 #Preview("Add") {
     EntryFormView()
-        .modelContainer(for: FoodEntry.self, inMemory: true)
+        .modelContainer(for: [FoodEntry.self, WeightEntry.self, WaterLog.self], inMemory: true)
 }

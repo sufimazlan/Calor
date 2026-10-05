@@ -6,8 +6,9 @@
 import Foundation
 import SwiftData
 
-/// Everything needed to rebuild Calor on a phone: meals, profile, targets and settings.
-/// Saved as JSON, one file per day.
+/// Everything needed to rebuild Calor on a phone: meals, weigh-ins, water,
+/// profile, targets and settings. Saved as JSON, one file per day.
+/// Fields added after version 1 are optional, so older backups still restore.
 struct CalorBackup: Codable {
     struct Entry: Codable {
         var id: UUID
@@ -23,6 +24,20 @@ struct CalorBackup: Codable {
         var confidence: String?
         var notes: String?
         var thumbnail: Data?
+        var isFavorite: Bool?
+        var healthScore: Int?
+    }
+
+    struct Weight: Codable {
+        var id: UUID
+        var date: Date
+        var kg: Double
+        var source: String
+    }
+
+    struct Water: Codable {
+        var day: Date
+        var glasses: Int
     }
 
     var version: Int
@@ -40,6 +55,11 @@ struct CalorBackup: Codable {
     var lunchReminderMinutes: Int
     var dinnerReminderMinutes: Int
     var entries: [Entry]
+    /// Version 2 and later.
+    var weights: [Weight]?
+    var water: [Water]?
+    var waterGoalGlasses: Int?
+    var weighInReminderEnabled: Bool?
 }
 
 extension CalorBackup.Entry {
@@ -57,8 +77,16 @@ extension CalorBackup.Entry {
             source: entry.sourceRaw,
             confidence: entry.confidenceRaw,
             notes: entry.notes,
-            thumbnail: includePhoto ? entry.thumbnail : nil
+            thumbnail: includePhoto ? entry.thumbnail : nil,
+            isFavorite: entry.isFavorite,
+            healthScore: entry.healthScore
         )
+    }
+}
+
+extension CalorBackup.Weight {
+    init(_ entry: WeightEntry) {
+        self.init(id: entry.id, date: entry.date, kg: entry.kg, source: entry.sourceRaw)
     }
 }
 
@@ -246,13 +274,15 @@ enum BackupManager {
         let defaults = UserDefaults.standard
         let includePhotos = forcePhotos ?? (defaults.object(forKey: SettingsKey.backupIncludesPhotos) as? Bool ?? true)
         let entries = try context.fetch(FetchDescriptor<FoodEntry>(sortBy: [SortDescriptor(\.timestamp)]))
+        let weights = try context.fetch(FetchDescriptor<WeightEntry>(sortBy: [SortDescriptor(\.date)]))
+        let water = try context.fetch(FetchDescriptor<WaterLog>(sortBy: [SortDescriptor(\.day)]))
 
         func integer(_ key: String, default value: Int) -> Int {
             defaults.object(forKey: key) as? Int ?? value
         }
 
         return CalorBackup(
-            version: 1,
+            version: 2,
             createdAt: .now,
             profile: Profile(data: defaults.data(forKey: SettingsKey.profile)),
             userName: defaults.string(forKey: SettingsKey.userName) ?? "",
@@ -266,14 +296,18 @@ enum BackupManager {
             breakfastReminderMinutes: MealReminders.minutes(for: MealReminders.all[0]),
             lunchReminderMinutes: MealReminders.minutes(for: MealReminders.all[1]),
             dinnerReminderMinutes: MealReminders.minutes(for: MealReminders.all[2]),
-            entries: entries.map { CalorBackup.Entry($0, includePhoto: includePhotos) }
+            entries: entries.map { CalorBackup.Entry($0, includePhoto: includePhotos) },
+            weights: weights.map { CalorBackup.Weight($0) },
+            water: water.filter { $0.glasses > 0 }.map { CalorBackup.Water(day: $0.day, glasses: $0.glasses) },
+            waterGoalGlasses: integer(SettingsKey.waterGoalGlasses, default: SettingsKey.defaultWaterGoal),
+            weighInReminderEnabled: defaults.bool(forKey: SettingsKey.weighInReminderEnabled)
         )
     }
 
     // MARK: - Restoring
 
-    /// The backup plus any meals on this phone it doesn't already contain, e.g.
-    /// meals logged after a reinstall, so restoring it doesn't lose them.
+    /// The backup plus any meals, weigh-ins and water on this phone it doesn't
+    /// already contain, e.g. logged after a reinstall, so restoring it doesn't lose them.
     static func merging(_ backup: CalorBackup, withMealsIn context: ModelContext) -> CalorBackup {
         var merged = backup
         let known = Set(backup.entries.map(\.id))
@@ -281,6 +315,23 @@ enum BackupManager {
         merged.entries += onPhone
             .filter { !known.contains($0.id) }
             .map { CalorBackup.Entry($0, includePhoto: true) }
+
+        let knownWeights = Set((backup.weights ?? []).map(\.id))
+        let weightsOnPhone = (try? context.fetch(FetchDescriptor<WeightEntry>())) ?? []
+        let newWeights = weightsOnPhone.filter { !knownWeights.contains($0.id) }.map { CalorBackup.Weight($0) }
+        if backup.weights != nil || !newWeights.isEmpty {
+            merged.weights = (backup.weights ?? []) + newWeights
+        }
+
+        let calendar = Calendar.current
+        let knownDays = Set((backup.water ?? []).map { calendar.startOfDay(for: $0.day) })
+        let waterOnPhone = (try? context.fetch(FetchDescriptor<WaterLog>())) ?? []
+        let newWater = waterOnPhone
+            .filter { $0.glasses > 0 && !knownDays.contains(calendar.startOfDay(for: $0.day)) }
+            .map { CalorBackup.Water(day: $0.day, glasses: $0.glasses) }
+        if backup.water != nil || !newWater.isEmpty {
+            merged.water = (backup.water ?? []) + newWater
+        }
         return merged
     }
 
@@ -299,6 +350,8 @@ enum BackupManager {
     /// Replaces every meal and setting on this phone with the backup.
     /// If the phone has meals, they're first saved to the backup folder as
     /// "Calor before restore <time>.json"; if that can't be done, nothing is changed.
+    /// Weigh-ins and water are replaced only if the backup has them (version 2 and later),
+    /// so restoring an older backup keeps the ones on the phone.
     static func restore(_ backup: CalorBackup, context: ModelContext) throws {
         try saveCopyBeforeRestore(context: context)
 
@@ -306,6 +359,25 @@ enum BackupManager {
         // inserts are saved together, and can be undone if saving fails.
         for old in try context.fetch(FetchDescriptor<FoodEntry>()) {
             context.delete(old)
+        }
+        if let weights = backup.weights {
+            for old in try context.fetch(FetchDescriptor<WeightEntry>()) {
+                context.delete(old)
+            }
+            for saved in weights {
+                let weight = WeightEntry(date: saved.date, kg: saved.kg,
+                                         source: WeightSource(rawValue: saved.source) ?? .manual)
+                weight.id = saved.id
+                context.insert(weight)
+            }
+        }
+        if let water = backup.water {
+            for old in try context.fetch(FetchDescriptor<WaterLog>()) {
+                context.delete(old)
+            }
+            for saved in water {
+                context.insert(WaterLog(day: Calendar.current.startOfDay(for: saved.day), glasses: saved.glasses))
+            }
         }
         for saved in backup.entries {
             let entry = FoodEntry(
@@ -320,9 +392,11 @@ enum BackupManager {
                 source: EntrySource(rawValue: saved.source) ?? .manual,
                 confidence: saved.confidence.flatMap(Confidence.init(rawValue:)),
                 thumbnail: saved.thumbnail,
-                notes: saved.notes
+                notes: saved.notes,
+                healthScore: saved.healthScore
             )
             entry.id = saved.id
+            entry.isFavorite = saved.isFavorite ?? false
             context.insert(entry)
         }
         do {
@@ -347,6 +421,12 @@ enum BackupManager {
         defaults.set(backup.breakfastReminderMinutes, forKey: SettingsKey.breakfastReminderMinutes)
         defaults.set(backup.lunchReminderMinutes, forKey: SettingsKey.lunchReminderMinutes)
         defaults.set(backup.dinnerReminderMinutes, forKey: SettingsKey.dinnerReminderMinutes)
+        if let waterGoal = backup.waterGoalGlasses {
+            defaults.set(waterGoal, forKey: SettingsKey.waterGoalGlasses)
+        }
+        if let weighInReminder = backup.weighInReminderEnabled {
+            defaults.set(weighInReminder, forKey: SettingsKey.weighInReminderEnabled)
+        }
     }
 
     private static func saveCopyBeforeRestore(context: ModelContext) throws {

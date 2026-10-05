@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -16,6 +17,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.breakfastReminderMinutes) private var breakfastMinutes = MealReminders.all[0].defaultMinutes
     @AppStorage(SettingsKey.lunchReminderMinutes) private var lunchMinutes = MealReminders.all[1].defaultMinutes
     @AppStorage(SettingsKey.dinnerReminderMinutes) private var dinnerMinutes = MealReminders.all[2].defaultMinutes
+    @AppStorage(SettingsKey.weighInReminderEnabled) private var weighInReminderEnabled = false
+    @AppStorage(SettingsKey.waterGoalGlasses) private var waterGoal = SettingsKey.defaultWaterGoal
     @State private var remindersBlocked = false
     @State private var backupFlow = BackupFlow()
     @AppStorage(SettingsKey.profile) private var profileData: Data?
@@ -73,10 +76,13 @@ struct SettingsView: View {
                             fatTarget = 0
                         }
                     }
+                    Stepper(value: $waterGoal, in: 4...16) {
+                        LabeledContent("Water", value: "\(waterGoal) glasses (\(waterLitres) L)")
+                    }
                 } header: {
                     Text("Targets")
                 } footer: {
-                    Text("Calculated from your profile. Fine-tune them here. Automatic carbs and fat: 30% of calories from fat, carbs for the rest. Each phone keeps its own.")
+                    Text("Calculated from your profile. Fine-tune them here. Automatic carbs and fat: 30% of calories from fat, carbs for the rest. A glass of water is \(SettingsKey.waterGlassML) ml. Each phone keeps its own.")
                 }
 
                 Section {
@@ -92,11 +98,12 @@ struct SettingsView: View {
                         DatePicker("Lunch", selection: timeBinding($lunchMinutes), displayedComponents: .hourAndMinute)
                         DatePicker("Dinner", selection: timeBinding($dinnerMinutes), displayedComponents: .hourAndMinute)
                     }
+                    Toggle("Weekly weigh-in (Monday 7:30)", isOn: $weighInReminderEnabled)
                 } footer: {
                     if remindersBlocked {
                         Text("Notifications are turned off for Calor. Turn them on in the iPhone Settings app → Notifications → Calor.")
                     } else {
-                        Text("A daily nudge to snap your meal.")
+                        Text("A daily nudge to snap your meal, and a weekly one to log your weight.")
                     }
                 }
 
@@ -111,16 +118,11 @@ struct SettingsView: View {
                     }
                 }
 
+                ClaudeSettingsSection()
+                HealthSettingsSection()
                 BackupSettingsSection(flow: backupFlow)
+                ExportSection()
                 InstallSettingsSection()
-
-                Section {
-                    LabeledContent("Mode", value: "Demo")
-                } header: {
-                    Text("Photo analysis")
-                } footer: {
-                    Text("Photos get sample results for now. Real Claude analysis starts once an API key is added here.")
-                }
             }
             .navigationTitle("Settings")
             .backupFlowPresenter(backupFlow)
@@ -139,6 +141,18 @@ struct SettingsView: View {
             .onChange(of: [breakfastMinutes, lunchMinutes, dinnerMinutes]) {
                 Task { await MealReminders.reschedule() }
             }
+            .onChange(of: weighInReminderEnabled) { _, isOn in
+                Task {
+                    if isOn {
+                        let granted = await MealReminders.requestPermission()
+                        remindersBlocked = !granted
+                        if !granted {
+                            weighInReminderEnabled = false
+                        }
+                    }
+                    await WeighInReminder.reschedule()
+                }
+            }
             .fullScreenCover(isPresented: $isRedoingSetup) {
                 OnboardingView(isRedo: true)
             }
@@ -152,6 +166,10 @@ struct SettingsView: View {
 }
 
 extension SettingsView {
+    private var waterLitres: String {
+        (Double(waterGoal * SettingsKey.waterGlassML) / 1000).formatted(.number.precision(.fractionLength(0...2)))
+    }
+
     private var autoMacros: MacroTargets {
         MacroTargets(calorieGoal: dailyGoal, proteinTargetG: proteinTarget)
     }
@@ -183,4 +201,5 @@ extension SettingsView {
 
 #Preview {
     SettingsView()
+        .modelContainer(for: [FoodEntry.self, WeightEntry.self, WaterLog.self], inMemory: true)
 }

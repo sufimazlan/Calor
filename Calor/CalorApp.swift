@@ -14,6 +14,6 @@ struct CalorApp: App {
         WindowGroup {
             RootView()
         }
-        .modelContainer(for: FoodEntry.self)
+        .modelContainer(for: [FoodEntry.self, WeightEntry.self, WaterLog.self])
     }
 }

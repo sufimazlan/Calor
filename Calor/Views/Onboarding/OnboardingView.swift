@@ -740,8 +740,11 @@ struct OnboardingView: View {
         proteinTarget = proteinValue
         carbsTarget = carbsOverride ?? 0
         fatTarget = fatOverride ?? 0
+        let finished = ProfileEditView.keepingOrStartingPlan(profile, saved: Profile(data: profileData))
         // Saved last: on first launch this switches the app to the main tabs.
-        profileData = profile.data
+        profileData = finished.data
+        // The weight from setup is the first weigh-in (or a new one after a redo).
+        WeightLog.recordProfileWeight(finished.weightKg, context: modelContext)
         if isRedo {
             dismiss()
         }
@@ -1019,8 +1022,10 @@ private struct PlanBuildingView: View {
 
 #Preview("First launch") {
     OnboardingView()
+        .modelContainer(for: [FoodEntry.self, WeightEntry.self, WaterLog.self], inMemory: true)
 }
 
 #Preview("Redo") {
     OnboardingView(isRedo: true)
+        .modelContainer(for: [FoodEntry.self, WeightEntry.self, WaterLog.self], inMemory: true)
 }

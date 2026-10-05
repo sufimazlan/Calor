@@ -4,12 +4,14 @@
 //
 
 import SwiftUI
+import SwiftData
 import PhotosUI
 import UIKit
 
 /// Edit the profile from Settings. Saving recalculates the calorie goal and protein target.
 struct ProfileEditView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @AppStorage(SettingsKey.profile) private var profileData: Data?
     @AppStorage(SettingsKey.dailyGoalKcal) private var dailyGoal = SettingsKey.defaultDailyGoal
     @AppStorage(SettingsKey.proteinTargetG) private var proteinTarget = 0
@@ -179,20 +181,37 @@ struct ProfileEditView: View {
         }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
-                    savedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                    savedAvatar = avatarData
-                    profileData = profile.data
-                    dailyGoal = goalValue
-                    proteinTarget = proteinValue
-                    dismiss()
-                }
+                Button("Save", action: save)
             }
         }
     }
 }
 
 extension ProfileEditView {
+    private func save() {
+        savedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        savedAvatar = avatarData
+        profileData = Self.keepingOrStartingPlan(profile, saved: Profile(data: profileData)).data
+        dailyGoal = goalValue
+        proteinTarget = proteinValue
+        // A changed weight counts as a weigh-in.
+        WeightLog.recordProfileWeight(profile.weightKg, context: modelContext)
+        dismiss()
+    }
+
+    /// Progress is measured from when the goal was set: a new goal, target or
+    /// pace starts the plan again from today's weight.
+    static func keepingOrStartingPlan(_ profile: Profile, saved: Profile?) -> Profile {
+        var result = profile
+        if let saved, let start = saved.planStartDate, !profile.hasDifferentPlan(from: saved) {
+            result.planStartDate = start
+            result.startWeightKg = saved.startWeightKg
+        } else {
+            result.startPlan()
+        }
+        return result
+    }
+
     /// The step-by-step setup already saved new targets, so there's nothing left to do here.
     private func closeIfRedoSaved() {
         if profileData != profileDataBeforeRedo {
@@ -205,4 +224,5 @@ extension ProfileEditView {
     NavigationStack {
         ProfileEditView()
     }
+    .modelContainer(for: [FoodEntry.self, WeightEntry.self, WaterLog.self], inMemory: true)
 }

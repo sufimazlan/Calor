@@ -9,7 +9,7 @@ import SwiftData
 /// Shows the first-launch questions until a profile exists, then the main tabs.
 struct RootView: View {
     enum AppTab: Hashable {
-        case today, trends
+        case today, history, trends
     }
 
     @AppStorage(SettingsKey.profile) private var profileData: Data?
@@ -24,9 +24,19 @@ struct RootView: View {
             content
         }
         .task {
+            // Profiles from before weigh-ins existed get a starting weigh-in and plan.
+            WeightLog.preparePlan(context: modelContext)
             await ReinstallReminders.reschedule()
             await MealReminders.reschedule()
+            await WeighInReminder.reschedule()
             BackupManager.backUpIfNeeded(context: modelContext, minimumAge: 20 * 60 * 60)
+            await WeightLog.importFromHealth(context: modelContext)
+        }
+        .onChange(of: profileData == nil) { _, hasNoProfile in
+            // Setup finished, or a backup was restored on the welcome screen.
+            if !hasNoProfile {
+                WeightLog.preparePlan(context: modelContext)
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -35,6 +45,7 @@ struct RootView: View {
                 Task {
                     await ReinstallReminders.reschedule()
                     await MealReminders.reschedule()
+                    await WeightLog.importFromHealth(context: modelContext)
                 }
                 BackupManager.backUpIfNeeded(context: modelContext, minimumAge: 20 * 60 * 60)
             case .background:
@@ -54,6 +65,9 @@ struct RootView: View {
             TabView(selection: $selectedTab) {
                 Tab("Today", systemImage: "fork.knife", value: AppTab.today) {
                     TodayView(homeRequests: homeRequests, goHome: goHome)
+                }
+                Tab("History", systemImage: "calendar", value: AppTab.history) {
+                    HistoryView(goHome: goHome)
                 }
                 Tab("Trends", systemImage: "chart.bar.xaxis", value: AppTab.trends) {
                     TrendsView(goHome: goHome)
